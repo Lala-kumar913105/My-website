@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>UPI Payment</title>
+    <style>
+      :root {
+        font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+        color-scheme: light;
+      }
+
+      body {
+        margin: 0;
+        background: #f1f5f9;
+        color: #0f172a;
+      }
+
+      header {
+        background: #ffffff;
+        padding: 20px 32px;
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+      }
+
+      header h1 {
+        margin: 0;
+        font-size: 24px;
+      }
+
+      main {
+        max-width: 720px;
+        margin: 32px auto;
+        padding: 0 24px;
+      }
+
+      .card {
+        background: #ffffff;
+        border-radius: 16px;
+        padding: 24px;
+        box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+        text-align: center;
+      }
+
+      .qr {
+        margin: 20px auto;
+        width: 240px;
+        height: 240px;
+        object-fit: contain;
+        border-radius: 12px;
+        border: 1px solid #e2e8f0;
+      }
+
+      .upi-link {
+        font-size: 12px;
+        word-break: break-all;
+        color: #64748b;
+      }
+
+      button {
+        margin-top: 16px;
+        border: none;
+        border-radius: 10px;
+        padding: 12px 20px;
+        background: #16a34a;
+        color: #ffffff;
+        font-size: 15px;
+        font-weight: 600;
+        cursor: pointer;
+      }
+
+      .status {
+        margin-top: 12px;
+        color: #0f766e;
+      }
+
+      .error {
+        color: #b91c1c;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Complete UPI Payment</h1>
+    </header>
+    <main>
+      <div class="card">
+        <p>Scan the QR code to pay.</p>
+        <img id="qr-image" class="qr" alt="UPI QR" />
+        <p id="upi-link" class="upi-link"></p>
+        <button id="paid-btn">I Have Paid</button>
+        <p id="status" class="status"></p>
+      </div>
+    </main>
+
+    <script>
+      const API_BASE = "http://localhost:8000/api/v1";
+      const orderId = new URLSearchParams(window.location.search).get("order_id");
+      const qrImage = document.getElementById("qr-image");
+      const upiLink = document.getElementById("upi-link");
+      const statusEl = document.getElementById("status");
+      const paidBtn = document.getElementById("paid-btn");
+
+      if (!orderId) {
+        statusEl.textContent = "Missing order_id.";
+        statusEl.classList.add("error");
+      } else {
+        fetchQr();
+      }
+
+      paidBtn.addEventListener("click", confirmPayment);
+
+      async function fetchQr() {
+        try {
+          statusEl.textContent = "Generating QR...";
+          const response = await fetch(`${API_BASE}/generate-upi/${orderId}`);
+          if (!response.ok) {
+            throw new Error("Unable to generate QR code");
+          }
+          const data = await response.json();
+          qrImage.src = `http://localhost:8000${data.qr_path}`;
+          upiLink.textContent = data.upi_url;
+          statusEl.textContent = "";
+        } catch (error) {
+          statusEl.textContent = error.message;
+          statusEl.classList.add("error");
+        }
+      }
+
+      async function confirmPayment() {
+        try {
+          statusEl.textContent = "Confirming payment...";
+          const response = await fetch(`${API_BASE}/confirm-payment/${orderId}`, {
+            method: "POST",
+          });
+          if (!response.ok) {
+            throw new Error("Payment confirmation failed");
+          }
+          statusEl.textContent = "Payment confirmed. Thank you!";
+        } catch (error) {
+          statusEl.textContent = error.message;
+          statusEl.classList.add("error");
+        }
+      }
+    </script>
+  </body>
+</html>

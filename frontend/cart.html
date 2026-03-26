@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Cart</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+      }
+
+      body {
+        margin: 0;
+        background: #f5f7fb;
+        color: #1f2933;
+      }
+
+      header {
+        background: #ffffff;
+        padding: 20px 32px;
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+      }
+
+      header h1 {
+        margin: 0;
+        font-size: 24px;
+      }
+
+      main {
+        max-width: 960px;
+        margin: 24px auto 80px;
+        padding: 0 24px;
+      }
+
+      .card {
+        background: #ffffff;
+        border-radius: 12px;
+        padding: 16px;
+        box-shadow: 0 8px 20px rgba(15, 23, 42, 0.06);
+      }
+
+      .cart-item {
+        display: flex;
+        gap: 16px;
+        align-items: center;
+        padding: 16px 0;
+        border-bottom: 1px solid #e2e8f0;
+      }
+
+      .cart-item:last-child {
+        border-bottom: none;
+      }
+
+      .cart-item img {
+        width: 96px;
+        height: 96px;
+        border-radius: 12px;
+        object-fit: cover;
+        background: #f1f5f9;
+      }
+
+      .cart-info {
+        flex: 1;
+      }
+
+      .cart-info h3 {
+        margin: 0 0 6px;
+        font-size: 18px;
+      }
+
+      .cart-meta {
+        margin: 0;
+        color: #64748b;
+        font-size: 14px;
+      }
+
+      .cart-actions {
+        text-align: right;
+      }
+
+      .price {
+        font-weight: 700;
+        font-size: 16px;
+        margin-bottom: 8px;
+      }
+
+      button {
+        border: none;
+        border-radius: 8px;
+        padding: 10px 16px;
+        font-size: 14px;
+        cursor: pointer;
+      }
+
+      .btn-remove {
+        background: #fee2e2;
+        color: #b91c1c;
+      }
+
+      .summary {
+        margin-top: 20px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      .btn-checkout {
+        background: #2563eb;
+        color: #ffffff;
+        font-weight: 600;
+      }
+
+      .status {
+        margin-top: 16px;
+        font-size: 14px;
+        color: #16a34a;
+      }
+
+      .error {
+        color: #b91c1c;
+      }
+
+      .empty {
+        text-align: center;
+        padding: 40px 0;
+        color: #64748b;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Your Cart</h1>
+    </header>
+    <main>
+      <div class="card">
+        <div id="cart-container" class="cart-list"></div>
+        <div id="summary" class="summary" style="display: none;">
+          <div>
+            <strong>Total:</strong> ₹<span id="total">0</span>
+          </div>
+          <button id="checkout-btn" class="btn-checkout">Proceed to Checkout</button>
+        </div>
+        <p id="status" class="status"></p>
+      </div>
+    </main>
+
+    <script src="checkout.js"></script>
+    <script>
+      const API_BASE = "http://localhost:8000/api/v1";
+      const userId = new URLSearchParams(window.location.search).get("user_id");
+      const cartContainer = document.getElementById("cart-container");
+      const totalEl = document.getElementById("total");
+      const summaryEl = document.getElementById("summary");
+      const statusEl = document.getElementById("status");
+      const checkoutBtn = document.getElementById("checkout-btn");
+
+      if (!userId) {
+        cartContainer.innerHTML = "<p class='empty'>Missing user_id in query string.</p>";
+      } else {
+        fetchCart();
+      }
+
+      checkoutBtn.addEventListener("click", () => {
+        handleCheckout(userId, statusEl, fetchCart);
+      });
+
+      async function fetchCart() {
+        statusEl.textContent = "";
+        cartContainer.innerHTML = "<p>Loading cart...</p>";
+        summaryEl.style.display = "none";
+
+        try {
+          const response = await fetch(`${API_BASE}/cart/${userId}`);
+          if (!response.ok) {
+            throw new Error("Failed to load cart");
+          }
+          const cart = await response.json();
+          renderCart(cart.items || []);
+        } catch (error) {
+          cartContainer.innerHTML = `<p class='empty error'>${error.message}</p>`;
+        }
+      }
+
+      function renderCart(items) {
+        if (!items.length) {
+          cartContainer.innerHTML = "<p class='empty'>Your cart is empty.</p>";
+          summaryEl.style.display = "none";
+          return;
+        }
+
+        let total = 0;
+        cartContainer.innerHTML = "";
+
+        items.forEach((item) => {
+          const product = item.product || {};
+          const price = Number(product.price || 0);
+          total += price * item.quantity;
+
+          const row = document.createElement("div");
+          row.className = "cart-item";
+          row.innerHTML = `
+            <img src="${product.image_url ? `http://localhost:8000${product.image_url}` : "https://via.placeholder.com/96"}" alt="${product.name || "Product"}" />
+            <div class="cart-info">
+              <h3>${product.name || "Product"}</h3>
+              <p class="cart-meta">Price: ₹${price.toFixed(2)} · Qty: ${item.quantity}</p>
+            </div>
+            <div class="cart-actions">
+              <div class="price">₹${(price * item.quantity).toFixed(2)}</div>
+              <button class="btn-remove" data-id="${item.id}">Remove</button>
+            </div>
+          `;
+          row.querySelector(".btn-remove").addEventListener("click", () => removeItem(item.id));
+          cartContainer.appendChild(row);
+        });
+
+        totalEl.textContent = total.toFixed(2);
+        summaryEl.style.display = "flex";
+      }
+
+      async function removeItem(itemId) {
+        statusEl.textContent = "";
+        try {
+          const response = await fetch(`${API_BASE}/cart/remove`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ user_id: Number(userId), item_id: itemId }),
+          });
+
+          if (!response.ok) {
+            throw new Error("Failed to remove item");
+          }
+          statusEl.textContent = "Item removed.";
+          await fetchCart();
+        } catch (error) {
+          statusEl.textContent = error.message;
+          statusEl.classList.add("error");
+        }
+      }
+    </script>
+  </body>
+</html>

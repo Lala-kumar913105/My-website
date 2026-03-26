@@ -1,0 +1,108 @@
+{
+  "common": {
+    "welcome": "Welcome to our E-commerce Store!",
+    "search": "Search for products...",
+    "categories": "Categories",
+    "cart": "Cart",
+    "wishlist": "Wishlist",
+    "login": "Login",
+    "logout": "Logout",
+    "signup": "Sign Up",
+    "dashboard": "Dashboard",
+    "myProducts": "My Products",
+    "addProduct": "Add Product",
+    "profile": "Profile",
+    "orders": "Orders",
+    "admin": "Admin",
+    "home": "Home"
+  },
+  "home": {
+    "featuredProducts": "Featured Products",
+    "categories": "Browse by Categories",
+    "offers": "Special Offers",
+    "noProducts": "No products found",
+    "add": "Add to Cart",
+    "wishlist": "Add to Wishlist"
+  },
+  "product": {
+    "title": "Product Details",
+    "description": "Description",
+    "price": "Price",
+    "stock": "Stock",
+    "category": "Category",
+    "seller": "Seller",
+    "reviews": "Reviews",
+    "add": "Add to Cart",
+    "wishlist": "Add to Wishlist",
+    "related": "Related Products"
+  },
+  "cart": {
+    "title": "Shopping Cart",
+    "empty": "Your cart is empty",
+    "product": "Product",
+    "price": "Price",
+    "quantity": "Quantity",
+    "total": "Total",
+    "checkout": "Checkout",
+    "remove": "Remove"
+  },
+  "wishlist": {
+    "title": "My Wishlist",
+    "empty": "Your wishlist is empty",
+    "remove": "Remove"
+  },
+  "orders": {
+    "title": "My Orders",
+    "empty": "No orders found",
+    "orderNumber": "Order #",
+    "date": "Date",
+    "status": "Status",
+    "total": "Total",
+    "details": "View Details"
+  },
+  "login": {
+    "title": "Login",
+    "email": "Email",
+    "password": "Password",
+    "phone": "Phone Number",
+    "remember": "Remember Me",
+    "forgot": "Forgot Password?",
+    "submit": "Login",
+    "signup": "Don't have an account? Sign Up"
+  },
+  "signup": {
+    "title": "Sign Up",
+    "name": "Full Name",
+    "email": "Email",
+    "phone": "Phone Number",
+    "password": "Password",
+    "confirm": "Confirm Password",
+    "submit": "Sign Up",
+    "login": "Already have an account? Login"
+  },
+  "sellerDashboard": {
+    "title": "Seller Dashboard",
+    "products": "My Products",
+    "orders": "Orders",
+    "analytics": "Analytics",
+    "addProduct": "Add Product"
+  },
+  "addProduct": {
+    "title": "Add New Product",
+    "name": "Product Name",
+    "description": "Description",
+    "price": "Price",
+    "stock": "Stock",
+    "category": "Category",
+    "image": "Product Image",
+    "submit": "Add Product"
+  },
+  "admin": {
+    "title": "Admin Dashboard",
+    "users": "Users",
+    "sellers": "Sellers",
+    "products": "Products",
+    "orders": "Orders",
+    "analytics": "Analytics"
+  }
+}

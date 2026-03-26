@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>My Orders</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+      }
+
+      body {
+        margin: 0;
+        background: #f8fafc;
+        color: #1f2933;
+      }
+
+      header {
+        background: #ffffff;
+        padding: 20px 32px;
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+      }
+
+      header h1 {
+        margin: 0;
+        font-size: 24px;
+      }
+
+      main {
+        max-width: 960px;
+        margin: 24px auto 80px;
+        padding: 0 24px;
+      }
+
+      .order-card {
+        background: #ffffff;
+        border-radius: 12px;
+        padding: 20px;
+        margin-bottom: 16px;
+        box-shadow: 0 8px 20px rgba(15, 23, 42, 0.06);
+      }
+
+      .order-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 12px;
+      }
+
+      .order-header h3 {
+        margin: 0;
+      }
+
+      .order-meta {
+        color: #64748b;
+        font-size: 14px;
+      }
+
+      .items {
+        margin-top: 12px;
+      }
+
+      .item-row {
+        display: flex;
+        justify-content: space-between;
+        font-size: 14px;
+        color: #334155;
+        padding: 6px 0;
+        border-bottom: 1px solid #e2e8f0;
+      }
+
+      .item-row:last-child {
+        border-bottom: none;
+      }
+
+      .total {
+        text-align: right;
+        font-weight: 700;
+        margin-top: 12px;
+      }
+
+      .empty {
+        text-align: center;
+        color: #64748b;
+        padding: 40px 0;
+      }
+
+      .error {
+        color: #b91c1c;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>My Orders</h1>
+    </header>
+    <main>
+      <div id="orders-container"></div>
+    </main>
+
+    <script>
+      const API_BASE = "http://localhost:8000/api/v1";
+      const userId = new URLSearchParams(window.location.search).get("user_id");
+      const ordersContainer = document.getElementById("orders-container");
+
+      if (!userId) {
+        ordersContainer.innerHTML = "<p class='empty'>Missing user_id in query string.</p>";
+      } else {
+        fetchOrders();
+      }
+
+      async function fetchOrders() {
+        ordersContainer.innerHTML = "<p>Loading orders...</p>";
+        try {
+          const response = await fetch(`${API_BASE}/my-orders/${userId}`);
+          if (!response.ok) {
+            throw new Error("Failed to load orders");
+          }
+          const orders = await response.json();
+          renderOrders(orders || []);
+        } catch (error) {
+          ordersContainer.innerHTML = `<p class='empty error'>${error.message}</p>`;
+        }
+      }
+
+      function renderOrders(orders) {
+        if (!orders.length) {
+          ordersContainer.innerHTML = "<p class='empty'>No orders found.</p>";
+          return;
+        }
+
+        ordersContainer.innerHTML = "";
+        orders.forEach((order) => {
+          const card = document.createElement("div");
+          card.className = "order-card";
+
+          const createdAt = order.created_at ? new Date(order.created_at) : null;
+          const formattedDate = createdAt ? createdAt.toLocaleString() : "";
+
+          const itemsHtml = (order.order_items || [])
+            .map((item) => {
+              const productName = item.product?.name || `Product #${item.product_id}`;
+              const subtotal = item.price_at_purchase * item.quantity;
+              return `
+                <div class="item-row">
+                  <span>${productName} × ${item.quantity}</span>
+                  <span>₹${subtotal.toFixed(2)}</span>
+                </div>
+              `;
+            })
+            .join("");
+
+          card.innerHTML = `
+            <div class="order-header">
+              <div>
+                <h3>Order #${order.id}</h3>
+                <div class="order-meta">${formattedDate}</div>
+              </div>
+              <div class="order-meta">Status: ${order.status}</div>
+            </div>
+            <div class="items">${itemsHtml}</div>
+            <div class="total">Total: ₹${Number(order.total_amount || 0).toFixed(2)}</div>
+          `;
+
+          ordersContainer.appendChild(card);
+        });
+      }
+    </script>
+  </body>
+</html>

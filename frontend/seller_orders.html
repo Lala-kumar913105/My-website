@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Seller Orders</title>
+    <style>
+      :root {
+        font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+        color-scheme: light;
+      }
+
+      body {
+        margin: 0;
+        background: #f8fafc;
+        color: #0f172a;
+      }
+
+      header {
+        background: #ffffff;
+        padding: 20px 32px;
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+      }
+
+      header h1 {
+        margin: 0;
+        font-size: 24px;
+      }
+
+      main {
+        max-width: 960px;
+        margin: 24px auto 80px;
+        padding: 0 24px;
+      }
+
+      .order-card {
+        background: #ffffff;
+        border-radius: 12px;
+        padding: 20px;
+        margin-bottom: 16px;
+        box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
+      }
+
+      .order-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 12px;
+      }
+
+      .order-meta {
+        font-size: 14px;
+        color: #64748b;
+      }
+
+      .item {
+        display: flex;
+        justify-content: space-between;
+        padding: 6px 0;
+        border-bottom: 1px solid #e2e8f0;
+        font-size: 14px;
+      }
+
+      .item:last-child {
+        border-bottom: none;
+      }
+
+      .actions {
+        margin-top: 12px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      button {
+        border: none;
+        border-radius: 8px;
+        padding: 10px 16px;
+        background: #2563eb;
+        color: #ffffff;
+        font-weight: 600;
+        cursor: pointer;
+      }
+
+      .status {
+        margin-top: 6px;
+        color: #16a34a;
+        font-size: 13px;
+      }
+
+      .error {
+        color: #b91c1c;
+      }
+
+      .empty {
+        text-align: center;
+        color: #64748b;
+        padding: 40px 0;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Seller Orders</h1>
+    </header>
+    <main>
+      <div id="orders-container"></div>
+    </main>
+
+    <script>
+      const API_BASE = "http://localhost:8000/api/v1";
+      const ordersContainer = document.getElementById("orders-container");
+
+      fetchOrders();
+
+      async function fetchOrders() {
+        ordersContainer.innerHTML = "<p>Loading orders...</p>";
+        try {
+          const response = await fetch(`${API_BASE}/seller/orders`);
+          if (!response.ok) {
+            throw new Error("Failed to load orders");
+          }
+          const orders = await response.json();
+          renderOrders(orders || []);
+        } catch (error) {
+          ordersContainer.innerHTML = `<p class='empty error'>${error.message}</p>`;
+        }
+      }
+
+      function renderOrders(orders) {
+        if (!orders.length) {
+          ordersContainer.innerHTML = "<p class='empty'>No orders available.</p>";
+          return;
+        }
+
+        ordersContainer.innerHTML = "";
+        orders.forEach((order) => {
+          const card = document.createElement("div");
+          card.className = "order-card";
+          const productName = order.product_name || "Product";
+          const quantity = order.quantity || 0;
+          const paymentLabel = order.order_status || "pending";
+          card.innerHTML = `
+            <div class="order-header">
+              <div>
+                <strong>Order #${order.order_id}</strong>
+                <div class="order-meta">Address: ${order.customer_address || "N/A"}</div>
+              </div>
+              <div class="order-meta">Status: ${paymentLabel}</div>
+            </div>
+            <div class="item">
+              <span>${productName} × ${quantity}</span>
+              <span>₹${Number(order.total_amount || 0).toFixed(2)}</span>
+            </div>
+            <div class="order-meta">Customer: ${order.customer_name || "N/A"} (${order.customer_phone || "N/A"})</div>
+            <div class="actions">
+              <span class="order-meta">Order Date: ${new Date(order.order_date).toLocaleString()}</span>
+              <div>
+                <button data-id="${order.order_id}" data-status="accepted">Accept</button>
+                <button data-id="${order.order_id}" data-status="shipped">Ship</button>
+                <button data-id="${order.order_id}" data-status="delivered">Deliver</button>
+              </div>
+            </div>
+            <div class="status" id="status-${order.order_id}"></div>
+          `;
+
+          card.querySelectorAll("button").forEach((btn) => {
+            btn.addEventListener("click", () => updateStatus(btn.dataset.id, btn.dataset.status));
+          });
+          ordersContainer.appendChild(card);
+        });
+      }
+
+      async function updateStatus(orderId, status) {
+        const statusEl = document.getElementById(`status-${orderId}`);
+        statusEl.textContent = "Updating...";
+        statusEl.classList.remove("error");
+        try {
+          const response = await fetch(`${API_BASE}/seller/order-status/${orderId}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ status }),
+          });
+          if (!response.ok) {
+            throw new Error("Unable to update status");
+          }
+          const updated = await response.json();
+          statusEl.textContent = `Status updated to ${updated.order_status}`;
+          await fetchOrders();
+        } catch (error) {
+          statusEl.textContent = error.message;
+          statusEl.classList.add("error");
+        }
+      }
+    </script>
+  </body>
+</html>
