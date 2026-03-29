@@ -23,9 +23,8 @@ function HomeContent() {
   const [coinBalance, setCoinBalance] = useState<number | null>(null)
   const router = useRouter()
   const searchParams = useSearchParams()
-  const API = process.env.NEXT_PUBLIC_API_URL
-  const FALLBACK_API = 'http://127.0.0.1:8000'
-  const categoryId = searchParams.get('category')
+const API = process.env.NEXT_PUBLIC_API_URL || 'http://13.235.104.120:8000'
+const categoryId = searchParams.get('category')
 
   useEffect(() => {
     const storedToken = localStorage.getItem('token')
@@ -38,7 +37,7 @@ function HomeContent() {
   }, [router])
 
   useEffect(() => {
-    const baseUrl = API || FALLBACK_API
+    const baseUrl = API
     if (!baseUrl) {
       setProductsError('API url missing')
       return
@@ -80,8 +79,7 @@ function HomeContent() {
   }, [API, categoryId])
 
   const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null
-  const baseUrl = API || FALLBACK_API
-
+  const baseUrl = API
   const { data: recommendedProducts = [] } = useSWR<Listing[]>(
     token && baseUrl ? [`${baseUrl}/api/v1/listings?listing_type=product`, token] : null,
     ([url, bearer]) =>
@@ -94,14 +92,17 @@ function HomeContent() {
       fetch(url, { headers: { Authorization: `Bearer ${bearer}` } }).then((res) => res.json())
   )
 
-  const { data: trendingNearby = [] } = useSWR<Listing[]>(
-    baseUrl ? `${baseUrl}/api/v1/listings?listing_type=product` : null
-  )
-
+const { data: trendingNearby = [] } = useSWR<Listing[]>(
+  baseUrl ? `${baseUrl}/api/v1/listings?listing_type=product` : null,
+  (url) =>
+    fetch(url, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    }).then((res) => res.json())
+)
   const fetchCategories = async (userToken: string) => {
     setIsCategoriesLoading(true)
     try {
-      const baseUrl = API || FALLBACK_API
+      const baseUrl = API
       const requestUrl = `${baseUrl}/api/v1/categories`
       console.log('Categories URL:', requestUrl)
       const response = await fetch(requestUrl, {
@@ -126,7 +127,7 @@ function HomeContent() {
   }
 
   const fetchUserRole = async (userToken: string) => {
-    const baseUrl = API || FALLBACK_API
+    const baseUrl = API
     if (!baseUrl) {
       return
     }
@@ -194,7 +195,7 @@ function HomeContent() {
   }
 
   const performSearch = async (query: string) => {
-    const baseUrl = API || FALLBACK_API
+    const baseUrl = API
     if (!baseUrl) {
       setProductsError('API url missing')
       return

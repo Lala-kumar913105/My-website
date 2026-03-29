@@ -1,96 +1,87 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
-import { useI18n } from '@/app/i18n/context'
+import { RecaptchaVerifier, signInWithPhoneNumber } from 'firebase/auth'
+import { auth } from '@/lib/firebase'
 import LanguageToggle from '@/app/components/LanguageToggle'
-
+declare global {
+  interface Window {
+    recaptchaVerifier?: RecaptchaVerifier
+    confirmationResult?: any
+  }
+}
 export default function LoginPage() {
-  const { t } = useI18n()
   const [phoneNumber, setPhoneNumber] = useState('')
   const [otp, setOtp] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [showOtpInput, setShowOtpInput] = useState(false)
-  const router = useRouter()
-  const API = process.env.NEXT_PUBLIC_API_URL
 
-  const handleSendOtp = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setIsLoading(true)
-
-    try {
-      const response = await fetch(`${API}/api/v1/auth/send-otp`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ phone_number: phoneNumber }),
-      })
-
-      if (response.ok) {
-        const data = await response.json()
-        setShowOtpInput(true)
-      } else {
-        alert('Failed to send OTP')
-      }
-    } catch (error) {
-      alert('Error sending OTP')
-    } finally {
-      setIsLoading(false)
-    }
+const setupRecaptcha = () => {
+  if (!window.recaptchaVerifier) {
+    window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
+      size: 'invisible',
+    })
   }
+}
 
-  const handleVerifyOtp = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setIsLoading(true)
+const handleSendOtp = async (e: React.FormEvent) => {
+  e.preventDefault()
+  setIsLoading(true)
 
-    try {
-      const response = await fetch(`${API}/api/v1/auth/verify-otp`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          phone_number: phoneNumber,
-          otp: otp,
-        }),
-      })
-
-      if (response.ok) {
-        const data = await response.json()
-        const token = data.token || data.access_token
-        if (!token) {
-          alert('Login succeeded but no token was returned')
-          return
-        }
-        localStorage.setItem('token', token)
-        localStorage.setItem('phone_number', phoneNumber)
-        localStorage.setItem('otp', otp)
-        router.push('/')
-      } else {
-        alert('Invalid or expired OTP')
-      }
-    } catch (error) {
-      alert('Error verifying OTP')
-    } finally {
-      setIsLoading(false)
-    }
+  try {
+    setupRecaptcha()
+    const appVerifier = window.recaptchaVerifier!
+    const confirmationResult = await signInWithPhoneNumber(auth, phoneNumber, appVerifier)
+    window.confirmationResult = confirmationResult
+    setShowOtpInput(true)
+    alert('OTP sent successfully')
+  } catch (error) {
+    console.error(error)
+    alert('Error sending OTP')
+  } finally {
+    setIsLoading(false)
   }
+}
+const handleVerifyOtp = async (e: React.FormEvent) => {
+  e.preventDefault()
+  setIsLoading(true)
 
+  try {
+    if (!window.confirmationResult) {
+      alert('Pehle OTP send karo')
+      return
+    }
+
+    const result = await window.confirmationResult.confirm(otp)
+    const user = result.user
+    const token = await user.getIdToken()
+
+    localStorage.setItem('firebase_token', token)
+    localStorage.setItem('phone_number', phoneNumber)
+
+    alert('Login successful')
+    window.location.href = '/'
+  } catch (error) {
+    console.error(error)
+    alert('Invalid OTP')
+  } finally {
+    setIsLoading(false)
+  }
+}
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 to-indigo-100 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-8">
         <div className="text-center mb-8">
           <LanguageToggle />
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">{t('common.welcome')}</h1>
-          <p className="text-gray-600">{t('login.title')}</p>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">Welcome</h1>
+          <p className="text-gray-600">Login with phone OTP</p>
         </div>
 
         {!showOtpInput ? (
           <form onSubmit={handleSendOtp} className="space-y-6">
             <div>
               <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-2">
-                {t('login.phone')}
+               Phone Number
               </label>
               <input
                 id="phone"
@@ -123,7 +114,7 @@ export default function LoginPage() {
                 value={otp}
                 onChange={(e) => setOtp(e.target.value)}
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none transition-all"
-                placeholder={t('login.phone')}
+                placeholder="Enter OTP"
                 maxLength={6}
                 required
               />
@@ -145,10 +136,11 @@ export default function LoginPage() {
               onClick={() => setShowOtpInput(false)}
               className="w-full py-3 text-gray-600 font-semibold rounded-lg hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-all"
             >
-              {t('login.phone')}
+              Change Phone Number
             </button>
           </form>
         )}
+        <div id="recaptcha-container"></div>
       </div>
     </div>
   )
