@@ -28,15 +28,21 @@ export default function LoginPage() {
       })
 
       if (!response.ok) {
-        const errorMessage = await response.text()
-        throw new Error(errorMessage || 'Error sending OTP')
+        const errorBody = await response.text()
+        let detail = errorBody
+        try {
+          const parsed = JSON.parse(errorBody)
+          detail = parsed?.detail || parsed?.message || errorBody
+        } catch {}
+        console.error('Send OTP failed', { status: response.status, detail })
+        throw new Error(detail || 'Error sending OTP')
       }
 
       setShowOtpInput(true)
       alert('OTP sent successfully')
     } catch (error) {
       console.error(error)
-      alert('Error sending OTP')
+      alert(error instanceof Error ? error.message : 'Error sending OTP')
     } finally {
       setIsLoading(false)
     }
@@ -56,8 +62,14 @@ export default function LoginPage() {
       })
 
       if (!response.ok) {
-        const errorMessage = await response.text()
-        throw new Error(errorMessage || 'Invalid OTP')
+        const errorBody = await response.text()
+        let detail = errorBody
+        try {
+          const parsed = JSON.parse(errorBody)
+          detail = parsed?.detail || parsed?.message || errorBody
+        } catch {}
+        console.error('Verify OTP failed', { status: response.status, detail })
+        throw new Error(detail || 'Invalid OTP')
       }
 
       const data = (await response.json()) as OtpVerifyResponse
@@ -74,7 +86,7 @@ export default function LoginPage() {
       window.location.href = '/'
     } catch (error) {
       console.error(error)
-      alert('Invalid OTP')
+      alert(error instanceof Error ? error.message : 'Invalid OTP')
     } finally {
       setIsLoading(false)
     }

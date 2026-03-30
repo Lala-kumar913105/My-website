@@ -1,17 +1,84 @@
 import { NextResponse } from 'next/server'
 
+const FALLBACK_API = 'http://13.235.104.120'
+
+const normalizeBaseUrl = (rawUrl: string) => {
+  const trimmed = rawUrl.trim().replace(/\/$/, '')
+  return trimmed.replace(/\/api\/v1\/?$/, '')
+}
+
 export async function POST(request: Request) {
+  let payload: Record<string, unknown> | null = null
+  const requestId = crypto.randomUUID()
+
   try {
-    const payload = await request.json()
-    const response = await fetch('http://13.235.104.120/api/v1/auth/verify-otp', {
+    payload = await request.json()
+  } catch (error) {
+    console.error('[verify-otp] Invalid JSON payload', { requestId, error })
+    return NextResponse.json({ detail: 'Invalid payload' }, { status: 400 })
+  }
+
+  const rawBaseUrl = process.env.API_URL || FALLBACK_API
+  const baseUrl = normalizeBaseUrl(rawBaseUrl)
+
+  const phoneNumber =
+    (payload?.phone_number as string | undefined) ||
+    (payload?.phoneNumber as string | undefined)
+  const otp = (payload?.otp as string | undefined) || (payload?.code as string | undefined)
+
+  if (!phoneNumber || !otp) {
+    console.error('[verify-otp] Missing required fields', { requestId, payload })
+    return NextResponse.json(
+      { detail: 'phone_number and otp are required' },
+      { status: 400 }
+    )
+  }
+
+  const outboundPayload = { phone_number: phoneNumber, otp }
+
+  try {
+    console.info('[verify-otp] Forwarding OTP verification', {
+      requestId,
+      baseUrl,
+      endpoint: `${baseUrl}/api/v1/auth/verify-otp`,
+      phoneNumber,
+    })
+
+    const response = await fetch(`${baseUrl}/api/v1/auth/verify-otp`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(payload),
+      body: JSON.stringify(outboundPayload),
     })
 
     const data = await response.text()
+    console.info('[verify-otp] Backend response status', {
+      requestId,
+      status: response.status,
+    })
+
+    if (!response.ok) {
+      console.error('[verify-otp] Backend response body', {
+        requestId,
+        status: response.status,
+        body: data,
+      })
+      let detail = data
+      try {
+        const parsed = JSON.parse(data)
+        detail = parsed?.detail || parsed?.message || data
+      } catch {}
+      return NextResponse.json(
+        {
+          detail,
+          backend_status: response.status,
+          request_id: requestId,
+        },
+        { status: response.status }
+      )
+    }
+
     return new NextResponse(data, {
       status: response.status,
       headers: {
@@ -19,6 +86,14 @@ export async function POST(request: Request) {
       },
     })
   } catch (error) {
-    return NextResponse.json({ detail: 'Backend unavailable' }, { status: 503 })
+    console.error('[verify-otp] Backend unavailable', { requestId, error })
+    return NextResponse.json(
+      {
+        detail: 'Backend unavailable',
+        error: (error as Error)?.message,
+        request_id: requestId,
+      },
+      { status: 503 }
+    )
   }
 }
