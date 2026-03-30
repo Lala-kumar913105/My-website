@@ -1,15 +1,11 @@
 'use client'
 
 import { useState } from 'react'
-import { RecaptchaVerifier, signInWithPhoneNumber } from 'firebase/auth'
-import { auth } from '@/lib/firebase'
 import LanguageToggle from '@/app/components/LanguageToggle'
 
-declare global {
-  interface Window {
-    recaptchaVerifier?: RecaptchaVerifier
-    confirmationResult?: any
-  }
+type OtpVerifyResponse = {
+  token?: string
+  access_token?: string
 }
 
 export default function LoginPage() {
@@ -18,23 +14,24 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [showOtpInput, setShowOtpInput] = useState(false)
 
-  const setupRecaptcha = () => {
-    if (!window.recaptchaVerifier) {
-      window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
-        size: 'invisible',
-      })
-    }
-  }
-
   const handleSendOtp = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
 
     try {
-      setupRecaptcha()
-      const appVerifier = window.recaptchaVerifier!
-      const confirmationResult = await signInWithPhoneNumber(auth, phoneNumber, appVerifier)
-      window.confirmationResult = confirmationResult
+      const response = await fetch('/api/auth/send-otp', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ phone_number: phoneNumber }),
+      })
+
+      if (!response.ok) {
+        const errorMessage = await response.text()
+        throw new Error(errorMessage || 'Error sending OTP')
+      }
+
       setShowOtpInput(true)
       alert('OTP sent successfully')
     } catch (error) {
@@ -50,16 +47,27 @@ export default function LoginPage() {
     setIsLoading(true)
 
     try {
-      if (!window.confirmationResult) {
-        alert('Pehle OTP send karo')
-        return
+      const response = await fetch('/api/auth/verify-otp', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ phone_number: phoneNumber, otp }),
+      })
+
+      if (!response.ok) {
+        const errorMessage = await response.text()
+        throw new Error(errorMessage || 'Invalid OTP')
       }
 
-      const result = await window.confirmationResult.confirm(otp)
-      const user = result.user
-      const token = await user.getIdToken()
+      const data = (await response.json()) as OtpVerifyResponse
+      const token = data.access_token ?? data.token
 
-      localStorage.setItem('firebase_token', token)
+      if (!token) {
+        throw new Error('Token missing in response')
+      }
+
+      localStorage.setItem('token', token)
       localStorage.setItem('phone_number', phoneNumber)
 
       alert('Login successful')
@@ -145,7 +153,6 @@ export default function LoginPage() {
           </form>
         )}
 
-        <div id="recaptcha-container"></div>
       </div>
     </div>
   )
