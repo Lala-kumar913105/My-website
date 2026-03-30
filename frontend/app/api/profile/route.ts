@@ -53,10 +53,7 @@ export async function GET(request: Request) {
   const phoneNumber = request.headers.get('x-phone-number')?.trim()
   const otp = request.headers.get('x-otp')?.trim()
 
-  const rawBaseUrl =
-    process.env.NEXT_PUBLIC_API_BASE_URL ||
-    process.env.API_URL ||
-    FALLBACK_API
+  const rawBaseUrl = process.env.API_URL || FALLBACK_API
 
   const baseUrl = normalizeBaseUrl(rawBaseUrl)
 
@@ -149,10 +146,7 @@ export async function PUT(request: Request) {
   const phoneNumber = request.headers.get('x-phone-number')?.trim()
   const otp = request.headers.get('x-otp')?.trim()
 
-  const rawBaseUrl =
-    process.env.NEXT_PUBLIC_API_BASE_URL ||
-    process.env.API_URL ||
-    FALLBACK_API
+  const rawBaseUrl = process.env.API_URL || FALLBACK_API
 
   const baseUrl = normalizeBaseUrl(rawBaseUrl)
 
