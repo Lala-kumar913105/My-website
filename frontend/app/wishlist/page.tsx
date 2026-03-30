@@ -19,7 +19,7 @@ interface PageProps {
 const WishlistPage: React.FC<PageProps> = () => {
   const { t } = useI18n();
   const router = useRouter();
-  const API = process.env.NEXT_PUBLIC_API_URL;
+  const API = process.env.NEXT_PUBLIC_API_BASE_URL;
   const [wishlist, setWishlist] = React.useState<WishlistItem[]>([]);
   const [listings, setListings] = React.useState<Listing[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);

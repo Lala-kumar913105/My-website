@@ -33,7 +33,7 @@ interface Comment {
 
 export default function SocialFeedPage() {
   const router = useRouter();
-  const API = process.env.NEXT_PUBLIC_API_URL;
+  const API = process.env.NEXT_PUBLIC_API_BASE_URL;
   const [feed, setFeed] = useState<Post[]>([]);
   const [recommendedFeed, setRecommendedFeed] = useState<Post[]>([]);
   const [trending, setTrending] = useState<Post[]>([]);

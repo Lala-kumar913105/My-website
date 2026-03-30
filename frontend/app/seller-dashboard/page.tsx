@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 
 const SellerDashboard = () => {
   const router = useRouter();
-  const API = process.env.NEXT_PUBLIC_API_URL;
+  const API = process.env.NEXT_PUBLIC_API_BASE_URL;
   const [sellerData, setSellerData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [deliveryRate, setDeliveryRate] = useState<number>(1.5);

@@ -93,7 +93,13 @@
     </main>
 
     <script>
-      const API_BASE = "http://localhost:8000/api/v1";
+      const API_BASE_URL =
+        typeof process !== "undefined" &&
+        process.env &&
+        process.env.NEXT_PUBLIC_API_BASE_URL
+          ? process.env.NEXT_PUBLIC_API_BASE_URL
+          : "http://13.235.104.120";
+      const API_BASE = `${API_BASE_URL.replace(/\/$/, "")}/api/v1`;
       const orderId = new URLSearchParams(window.location.search).get("order_id");
       const qrImage = document.getElementById("qr-image");
       const upiLink = document.getElementById("upi-link");
@@ -117,7 +123,7 @@
             throw new Error("Unable to generate QR code");
           }
           const data = await response.json();
-          qrImage.src = `http://localhost:8000${data.qr_path}`;
+          qrImage.src = `${API_BASE_URL.replace(/\/$/, "")}${data.qr_path}`;
           upiLink.textContent = data.upi_url;
           statusEl.textContent = "";
         } catch (error) {

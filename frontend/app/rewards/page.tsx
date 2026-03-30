@@ -21,7 +21,7 @@ interface CoinTransaction {
 
 export default function RewardsPage() {
   const router = useRouter();
-  const API = process.env.NEXT_PUBLIC_API_URL;
+  const API = process.env.NEXT_PUBLIC_API_BASE_URL;
   const [wallet, setWallet] = useState<CoinBalance | null>(null);
   const [history, setHistory] = useState<CoinTransaction[]>([]);
   const [loading, setLoading] = useState(true);

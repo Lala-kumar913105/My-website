@@ -38,7 +38,7 @@ const parseJsonResponse = async (response: Response) => {
 export default function ProfilePage() {
   const router = useRouter()
   const apiBaseUrl = useMemo(() => {
-    const rawBase = process.env.NEXT_PUBLIC_API_URL?.trim()
+    const rawBase = process.env.NEXT_PUBLIC_API_BASE_URL?.trim()
     if (!rawBase) {
       return 'http://13.235.104.120'
     }

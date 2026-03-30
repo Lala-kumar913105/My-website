@@ -6,7 +6,7 @@ import { GoogleMap, LoadScript, Marker } from '@react-google-maps/api';
 
 const AddProduct = () => {
   const router = useRouter();
-  const API = process.env.NEXT_PUBLIC_API_URL;
+  const API = process.env.NEXT_PUBLIC_API_BASE_URL;
   const [loading, setLoading] = useState(false);
   const [categories, setCategories] = useState<Array<{ id: number; name: string }>>([]);
   const [formData, setFormData] = useState({

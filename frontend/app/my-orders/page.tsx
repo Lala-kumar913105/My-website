@@ -49,7 +49,7 @@ const formatStatus = (status: string) => status.replace(/_/g, " ");
 
 export default function MyOrdersPage() {
   const router = useRouter();
-  const API = process.env.NEXT_PUBLIC_API_URL;
+  const API = process.env.NEXT_PUBLIC_API_BASE_URL;
   const [orders, setOrders] = useState<Order[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [tracking, setTracking] = useState<Record<number, TrackingInfo>>({});

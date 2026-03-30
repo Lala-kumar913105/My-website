@@ -30,7 +30,7 @@ interface ProductCardProps {
 
 const ProductCard = ({ product }: ProductCardProps) => {
   const { t } = useI18n();
-  const API = process.env.NEXT_PUBLIC_API_URL;
+  const API = process.env.NEXT_PUBLIC_API_BASE_URL;
   const imageSrc = product.image_url ? `${API}${product.image_url}` : "/default-product.png";
   const trackActivity = async (activityType: string) => {
     try {

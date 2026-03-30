@@ -21,7 +21,7 @@ const STATUS_OPTIONS = ["pending", "confirmed", "rescheduled", "completed", "can
 
 export default function BookingManagementPage() {
   const router = useRouter();
-  const API = process.env.NEXT_PUBLIC_API_URL;
+  const API = process.env.NEXT_PUBLIC_API_BASE_URL;
   const [bookings, setBookings] = useState<BookingItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState("");

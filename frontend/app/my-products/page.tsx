@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 
 const MyProducts = () => {
   const router = useRouter();
-  const API = process.env.NEXT_PUBLIC_API_URL;
+  const API = process.env.NEXT_PUBLIC_API_BASE_URL;
   const [products, setProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 

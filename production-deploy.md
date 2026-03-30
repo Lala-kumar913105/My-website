@@ -70,7 +70,7 @@ gunicorn -c gunicorn_config.py app.main:app
 - Import `frontend/` repo.
 - Build: `npm run build`.
 - Output: `.next`.
-- Set `NEXT_PUBLIC_API_URL`.
+- Set `NEXT_PUBLIC_API_BASE_URL`.
 
 ### Backend (Render/Railway)
 - Use Dockerfile in `backend/`.

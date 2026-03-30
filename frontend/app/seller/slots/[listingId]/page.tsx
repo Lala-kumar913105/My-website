@@ -31,7 +31,7 @@ export default function SlotManagementPage() {
   const router = useRouter();
   const params = useParams();
   const listingId = Number(params?.listingId);
-  const API = process.env.NEXT_PUBLIC_API_URL;
+  const API = process.env.NEXT_PUBLIC_API_BASE_URL;
   const [slots, setSlots] = useState<Slot[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

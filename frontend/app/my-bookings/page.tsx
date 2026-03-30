@@ -20,7 +20,7 @@ const STATUS_STEPS = ["pending", "confirmed", "rescheduled", "completed", "cance
 
 export default function MyBookingsPage() {
   const router = useRouter();
-  const API = process.env.NEXT_PUBLIC_API_URL;
+  const API = process.env.NEXT_PUBLIC_API_BASE_URL;
   const [bookings, setBookings] = useState<BookingItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [notification, setNotification] = useState<string | null>(null);

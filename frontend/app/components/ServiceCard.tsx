@@ -20,7 +20,7 @@ interface ServiceCardProps {
 const ServiceCard = ({ service }: ServiceCardProps) => {
   const router = useRouter();
   const { t } = useI18n();
-  const API = process.env.NEXT_PUBLIC_API_URL;
+  const API = process.env.NEXT_PUBLIC_API_BASE_URL;
 
   const trackActivity = async (activityType: string) => {
     try {

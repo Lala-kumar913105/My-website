@@ -23,7 +23,7 @@ interface PageProps {
 const SellerStorePage: React.FC<PageProps> = ({ params }) => {
   const router = useRouter();
   const parsedSellerId = parseInt(params.sellerId);
-  const API = process.env.NEXT_PUBLIC_API_URL;
+  const API = process.env.NEXT_PUBLIC_API_BASE_URL;
   const [seller, setSeller] = useState<Seller | null>(null);
   const [isFollowing, setIsFollowing] = useState(false);
   const { data: sellerData, isLoading: sellerLoading } = useSWR<Seller>(

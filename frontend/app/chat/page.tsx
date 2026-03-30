@@ -13,7 +13,7 @@ interface ChatMessage {
 
 export default function ChatPage() {
   const router = useRouter();
-  const API = process.env.NEXT_PUBLIC_API_URL;
+  const API = process.env.NEXT_PUBLIC_API_BASE_URL;
   const [conversations, setConversations] = useState<ChatMessage[]>([]);
   const [activeUserId, setActiveUserId] = useState<number | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);

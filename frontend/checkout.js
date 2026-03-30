@@ -1,4 +1,10 @@
-const API_BASE = "http://localhost:8000/api/v1";
+const API_BASE_URL =
+  typeof process !== "undefined" &&
+  process.env &&
+  process.env.NEXT_PUBLIC_API_BASE_URL
+    ? process.env.NEXT_PUBLIC_API_BASE_URL
+    : "http://13.235.104.120";
+const API_BASE = `${API_BASE_URL.replace(/\/$/, "")}/api/v1`;
 
 async function handleCheckout(userId, statusEl, refreshCart) {
   if (!userId) {

@@ -50,15 +50,14 @@ export async function GET(request: Request) {
   const explicitToken = request.headers.get('x-access-token')?.trim()
   let token = headerToken || explicitToken || ''
 
-  console.log('Forwarding auth:', authHeader)
-
   const phoneNumber = request.headers.get('x-phone-number')?.trim()
   const otp = request.headers.get('x-otp')?.trim()
 
   const rawBaseUrl =
-    process.env.NEXT_PUBLIC_API_URL ||
+    process.env.NEXT_PUBLIC_API_BASE_URL ||
     process.env.API_URL ||
     FALLBACK_API
+
   const baseUrl = normalizeBaseUrl(rawBaseUrl)
 
   if (!token && phoneNumber && otp) {
@@ -147,15 +146,14 @@ export async function PUT(request: Request) {
   const explicitToken = request.headers.get('x-access-token')?.trim()
   let token = headerToken || explicitToken || ''
 
-  console.log('Forwarding auth:', authHeader)
-
   const phoneNumber = request.headers.get('x-phone-number')?.trim()
   const otp = request.headers.get('x-otp')?.trim()
 
   const rawBaseUrl =
-    process.env.NEXT_PUBLIC_API_URL ||
+    process.env.NEXT_PUBLIC_API_BASE_URL ||
     process.env.API_URL ||
     FALLBACK_API
+
   const baseUrl = normalizeBaseUrl(rawBaseUrl)
 
   if (!token && phoneNumber && otp) {

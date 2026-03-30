@@ -47,7 +47,7 @@ interface PageProps {
 }
 
 const AdminDashboardPage: React.FC<PageProps> = async () => {
-  const API = process.env.NEXT_PUBLIC_API_URL;
+  const API = process.env.NEXT_PUBLIC_API_BASE_URL;
   // Fetch analytics, users, sellers, and orders
   const [analyticsResponse, usersResponse, sellersResponse, ordersResponse] = await Promise.all([
     fetch(`${API}/api/v1/admin/analytics`),

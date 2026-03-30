@@ -18,7 +18,7 @@ export default function BookServicePage() {
   const router = useRouter();
   const params = useParams();
   const serviceId = params?.serviceId as string;
-  const API = process.env.NEXT_PUBLIC_API_URL;
+  const API = process.env.NEXT_PUBLIC_API_BASE_URL;
   const [service, setService] = useState<Service | null>(null);
   const [bookingTime, setBookingTime] = useState("");
   const [notes, setNotes] = useState("");

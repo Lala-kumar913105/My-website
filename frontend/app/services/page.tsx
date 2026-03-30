@@ -12,7 +12,7 @@ function ServicesContent() {
   const categoryId = useMemo(() => searchParams.get("category"), [searchParams]);
   const [listings, setListings] = useState<Listing[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const API = process.env.NEXT_PUBLIC_API_URL;
+  const API = process.env.NEXT_PUBLIC_API_BASE_URL;
 
   useEffect(() => {
     const token = localStorage.getItem("token");

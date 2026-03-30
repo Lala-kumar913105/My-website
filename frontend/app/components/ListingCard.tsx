@@ -25,7 +25,7 @@ interface ListingCardProps {
 const ListingCard = ({ listing, onAddToCart, onQuickAction }: ListingCardProps) => {
   const router = useRouter();
   const { t } = useI18n();
-  const API = process.env.NEXT_PUBLIC_API_URL;
+  const API = process.env.NEXT_PUBLIC_API_BASE_URL;
   const imageSrc = listing.image_url ? `${API}${listing.image_url}` : "/default-product.png";
 
   return (
