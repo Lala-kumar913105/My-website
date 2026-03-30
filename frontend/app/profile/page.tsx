@@ -40,7 +40,7 @@ export default function ProfilePage() {
   const apiBaseUrl = useMemo(() => {
     const rawBase = process.env.NEXT_PUBLIC_API_URL?.trim()
     if (!rawBase) {
-      return 'http://localhost:8000'
+      return 'http://13.235.104.120'
     }
     const normalized = rawBase.replace(/\/$/, '')
     return normalized.replace(/\/api\/v1\/?$/, '')

@@ -83,6 +83,6 @@ chmod -R 755 /var/www/ecommerce-website
 echo "====================================="
 echo "Installation completed successfully!"
 echo "====================================="
-echo "Backend API is running on http://127.0.0.1:8000"
+echo "Backend API is running on http://13.235.104.120"
 echo "Frontend is running on http://your_domain.com"
 echo "====================================="

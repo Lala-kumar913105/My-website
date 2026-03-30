@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 
-const FALLBACK_API = 'http://localhost:8000'
+const FALLBACK_API = 'http://13.235.104.120'
 const REQUEST_TIMEOUT_MS = 5000
 
 const normalizeBaseUrl = (rawUrl: string) => {

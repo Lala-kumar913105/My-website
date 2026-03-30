@@ -23,7 +23,7 @@ function HomeContent() {
   const [coinBalance, setCoinBalance] = useState<number | null>(null)
   const router = useRouter()
   const searchParams = useSearchParams()
-const API = process.env.NEXT_PUBLIC_API_URL || 'http://13.235.104.120:8000'
+const API = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://13.235.104.120'
 const categoryId = searchParams.get('category')
 
   useEffect(() => {
@@ -94,10 +94,12 @@ const categoryId = searchParams.get('category')
 
 const { data: trendingNearby = [] } = useSWR<Listing[]>(
   baseUrl ? `${baseUrl}/api/v1/listings?listing_type=product` : null,
-  (url) =>
-    fetch(url, {
+  async (url: string): Promise<Listing[]> => {
+    const res = await fetch(url, {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
-    }).then((res) => res.json())
+    })
+    return res.json()
+  }
 )
   const fetchCategories = async (userToken: string) => {
     setIsCategoriesLoading(true)
