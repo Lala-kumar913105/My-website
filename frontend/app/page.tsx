@@ -380,7 +380,7 @@ const { data: trendingNearby = [] } = useSWR<Listing[]>(
       </nav>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <div className="mb-12 rounded-[28px] bg-gradient-to-r from-purple-600 via-indigo-600 to-slate-900 px-6 py-8 text-white shadow-xl">
+        <div className="mb-12 rounded-[28px] bg-linear-to-r from-purple-600 via-indigo-600 to-slate-900 px-6 py-8 text-white shadow-xl">
           <div className="max-w-2xl">
             <p className="text-xs uppercase tracking-[0.2em] text-purple-100">Welcome back</p>
             <h1 className="mt-2 text-3xl font-semibold">{t('common.welcome')}</h1>

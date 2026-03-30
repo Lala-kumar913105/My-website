@@ -103,7 +103,7 @@ export default function RewardsPage() {
   return (
     <div className="min-h-screen bg-slate-50 px-4 py-10">
       <div className="max-w-5xl mx-auto space-y-6">
-        <div className="rounded-3xl bg-gradient-to-r from-purple-600 to-indigo-600 p-6 text-white shadow-xl">
+        <div className="rounded-3xl bg-linear-to-r from-purple-600 to-indigo-600 p-6 text-white shadow-xl">
           <h1 className="text-2xl font-semibold">Rewards Center</h1>
           <p className="text-sm text-purple-100">Keep your streak alive and redeem coins.</p>
           <div className="mt-4 flex flex-wrap gap-4">

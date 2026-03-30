@@ -178,7 +178,7 @@ export default function SocialFeedPage() {
         <div className="mb-6 overflow-x-auto">
           <div className="flex gap-4">
             {stories.map((story) => (
-              <div key={story.id} className="min-w-[120px] bg-white rounded-xl shadow p-3">
+              <div key={story.id} className="min-w-30 bg-white rounded-xl shadow p-3">
                 <div className="h-20 w-full rounded-lg bg-gray-100 flex items-center justify-center">
                   <span className="text-xs text-gray-500">Story {story.seller_id}</span>
                 </div>

@@ -61,7 +61,7 @@ const CategoryRow = ({ categories, isLoading = false }: CategoryRowProps) => {
           className="group flex flex-col items-center gap-3 rounded-2xl border border-slate-200/70 bg-white p-5 shadow-sm transition-all duration-200 hover:-translate-y-1 hover:border-purple-200 hover:shadow-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500"
           type="button"
         >
-          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-purple-100 via-purple-50 to-indigo-100 text-2xl text-purple-700 shadow-inner transition group-hover:from-purple-200 group-hover:to-indigo-200">
+          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-linear-to-br from-purple-100 via-purple-50 to-indigo-100 text-2xl text-purple-700 shadow-inner transition group-hover:from-purple-200 group-hover:to-indigo-200">
             <span className="drop-shadow-sm">{category.icon || fallbackIcon}</span>
           </div>
           <div className="space-y-1 text-center">
@@ -98,7 +98,7 @@ const CategoryRow = ({ categories, isLoading = false }: CategoryRowProps) => {
           </div>
         )}
       </div>
-      <div className="rounded-[28px] border border-indigo-100/80 bg-gradient-to-br from-white via-white to-indigo-50/80 p-7 shadow-sm">
+      <div className="rounded-[28px] border border-indigo-100/80 bg-linear-to-br from-white via-white to-indigo-50/80 p-7 shadow-sm">
         <div className="mb-7 flex items-center justify-between">
           <div>
             <h2 className="text-xl font-semibold text-gray-900">Book Services</h2>
