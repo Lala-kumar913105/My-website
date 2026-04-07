@@ -23,7 +23,7 @@ function HomeContent() {
   const [coinBalance, setCoinBalance] = useState<number | null>(null)
   const router = useRouter()
   const searchParams = useSearchParams()
-const API = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://13.235.104.120'
+const API = process.env.NEXT_PUBLIC_API_BASE_URL || (process.env.NODE_ENV === 'production' ? 'https://api.zivolf.com' : 'http://localhost:8000')
 const categoryId = searchParams.get('category')
 
   useEffect(() => {

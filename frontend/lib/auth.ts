@@ -1,5 +1,5 @@
 export const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL?.trim() || "http://localhost:8000";
+  process.env.NEXT_PUBLIC_API_BASE_URL?.trim() || "https://api.zivolf.com";
 
 type RequestOptions = {
   method?: "GET" | "POST";

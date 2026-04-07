@@ -3,7 +3,9 @@ const API_BASE_URL =
   process.env &&
   process.env.NEXT_PUBLIC_API_BASE_URL
     ? process.env.NEXT_PUBLIC_API_BASE_URL
-    : "http://13.235.104.120";
+    : window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
+      ? "http://localhost:8000"
+      : "https://api.zivolf.com";
 const API_BASE = `${API_BASE_URL.replace(/\/$/, "")}/api/v1`;
 
 async function handleCheckout(userId, statusEl, refreshCart) {

@@ -40,7 +40,9 @@ export default function ProfilePage() {
   const apiBaseUrl = useMemo(() => {
     const rawBase = process.env.NEXT_PUBLIC_API_BASE_URL?.trim()
     if (!rawBase) {
-      return 'http://13.235.104.120'
+      return process.env.NODE_ENV === 'production'
+        ? 'https://api.zivolf.com'
+        : 'http://localhost:8000'
     }
     const normalized = rawBase.replace(/\/$/, '')
     return normalized.replace(/\/api\/v1\/?$/, '')

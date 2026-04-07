@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server'
 
-const FALLBACK_API = 'http://13.235.104.120'
+const FALLBACK_API =
+  process.env.NODE_ENV === 'production'
+    ? 'https://api.zivolf.com'
+    : 'http://localhost:8000'
 
 const normalizeBaseUrl = (rawUrl: string) => {
   const trimmed = rawUrl.trim().replace(/\/$/, '')
@@ -18,7 +21,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ detail: 'Invalid payload' }, { status: 400 })
   }
 
-  const rawBaseUrl = process.env.API_URL || FALLBACK_API
+  const rawBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || process.env.API_URL || FALLBACK_API
   const baseUrl = normalizeBaseUrl(rawBaseUrl)
 
   const phoneNumber =
