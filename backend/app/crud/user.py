@@ -2,6 +2,7 @@ from sqlalchemy.orm import Session
 from app import models
 from app.models.user import User
 from app.schemas.user import UserCreate, UserUpdate, UserProfileUpdate
+from app.core.security import get_password_hash
 
 def get_user(db: Session, user_id: int):
     return db.query(User).filter(User.id == user_id).first()
@@ -16,7 +17,11 @@ def get_users(db: Session, skip: int = 0, limit: int = 100):
     return db.query(User).offset(skip).limit(limit).all()
 
 def create_user(db: Session, user: UserCreate):
-    db_user = User(**user.dict())
+    payload = user.dict()
+    raw_password = payload.pop("password", None)
+    if raw_password:
+        payload["hashed_password"] = get_password_hash(raw_password)
+    db_user = User(**payload)
     db.add(db_user)
     db.commit()
     db.refresh(db_user)

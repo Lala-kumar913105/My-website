@@ -21,7 +21,7 @@ export default function PwaClientProvider() {
     if (typeof window === "undefined") return;
 
     if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.register("/sw.js").catch(() => undefined);
+      navigator.serviceWorker.register("/service-worker.js").catch(() => undefined);
     }
 
     const handler = (event: Event) => {
@@ -35,10 +35,17 @@ export default function PwaClientProvider() {
     window.addEventListener("online", updateOnline);
     window.addEventListener("offline", updateOnline);
 
+    const handleInstalled = () => {
+      setInstallPrompt(null);
+      setShowInstall(false);
+    };
+    window.addEventListener("appinstalled", handleInstalled);
+
     return () => {
       window.removeEventListener("beforeinstallprompt", handler);
       window.removeEventListener("online", updateOnline);
       window.removeEventListener("offline", updateOnline);
+      window.removeEventListener("appinstalled", handleInstalled);
     };
   }, []);
 

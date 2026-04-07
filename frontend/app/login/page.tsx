@@ -1,171 +1,147 @@
-'use client'
+'use client';
 
-import { useState } from 'react'
-import LanguageToggle from '@/app/components/LanguageToggle'
+import Link from 'next/link';
+import { FormEvent, useState } from 'react';
+import toast from 'react-hot-toast';
+import { authRequest, clearLegacyToken, persistTokenForLegacyPages } from '@/lib/auth';
 
-type OtpVerifyResponse = {
-  token?: string
-  access_token?: string
-}
+type LoginResponse = {
+  message: string;
+  access_token?: string;
+  user: {
+    id: number;
+    email: string;
+    full_name?: string | null;
+  };
+};
+
+type AuthMeResponse = {
+  id: number;
+  email?: string;
+  full_name?: string | null;
+};
 
 export default function LoginPage() {
-  const [phoneNumber, setPhoneNumber] = useState('')
-  const [otp, setOtp] = useState('')
-  const [isLoading, setIsLoading] = useState(false)
-  const [showOtpInput, setShowOtpInput] = useState(false)
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [meLoading, setMeLoading] = useState(false);
+  const [meData, setMeData] = useState<AuthMeResponse | null>(null);
 
-  const handleSendOtp = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setIsLoading(true)
-
-    try {
-      const response = await fetch('/api/auth/send-otp', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ phone_number: phoneNumber }),
-      })
-
-      if (!response.ok) {
-        const errorBody = await response.text()
-        let detail = errorBody
-        try {
-          const parsed = JSON.parse(errorBody)
-          detail = parsed?.detail || parsed?.message || errorBody
-        } catch {}
-        console.error('Send OTP failed', { status: response.status, detail })
-        throw new Error(detail || 'Error sending OTP')
-      }
-
-      setShowOtpInput(true)
-      alert('OTP sent successfully')
-    } catch (error) {
-      console.error(error)
-      alert(error instanceof Error ? error.message : 'Error sending OTP')
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  const handleVerifyOtp = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setIsLoading(true)
+  const onSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
 
     try {
-      const response = await fetch('/api/auth/verify-otp', {
+      const data = await authRequest<LoginResponse>('/api/v1/auth/login', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ phone_number: phoneNumber, otp }),
-      })
+        body: { email, password },
+      });
 
-      if (!response.ok) {
-        const errorBody = await response.text()
-        let detail = errorBody
-        try {
-          const parsed = JSON.parse(errorBody)
-          detail = parsed?.detail || parsed?.message || errorBody
-        } catch {}
-        console.error('Verify OTP failed', { status: response.status, detail })
-        throw new Error(detail || 'Invalid OTP')
-      }
-
-      const data = (await response.json()) as OtpVerifyResponse
-      const token = data.access_token ?? data.token
-
-      if (!token) {
-        throw new Error('Token missing in response')
-      }
-
-      localStorage.setItem('token', token)
-      localStorage.setItem('phone_number', phoneNumber)
-
-      alert('Login successful')
-      window.location.href = '/'
+      persistTokenForLegacyPages(data.access_token);
+      toast.success(data.message || 'Login successful');
+      window.location.href = '/';
     } catch (error) {
-      console.error(error)
-      alert(error instanceof Error ? error.message : 'Invalid OTP')
+      toast.error(error instanceof Error ? error.message : 'Login failed');
     } finally {
-      setIsLoading(false)
+      setLoading(false);
     }
-  }
+  };
+
+  const checkCurrentUser = async () => {
+    setMeLoading(true);
+    try {
+      const data = await authRequest<AuthMeResponse>('/api/v1/auth/me');
+      setMeData(data);
+      toast.success('Fetched current user from cookie session');
+    } catch (error) {
+      setMeData(null);
+      toast.error(error instanceof Error ? error.message : 'Failed to fetch user');
+    } finally {
+      setMeLoading(false);
+    }
+  };
+
+  const logout = async () => {
+    try {
+      await authRequest<{ message: string }>('/api/v1/auth/logout', { method: 'POST' });
+      clearLegacyToken();
+      setMeData(null);
+      toast.success('Logged out');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Logout failed');
+    }
+  };
 
   return (
-    <div className="min-h-screen bg-linear-to-br from-purple-50 to-indigo-100 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-8">
-        <div className="text-center mb-8">
-          <LanguageToggle />
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Welcome</h1>
-          <p className="text-gray-600">Login with phone OTP</p>
+    <div className="min-h-screen flex items-center justify-center p-4 bg-gray-50">
+      <div className="bg-white w-full max-w-md rounded-2xl shadow p-6 space-y-5">
+        <div>
+          <h1 className="text-2xl font-bold mb-2">Email Login</h1>
+          <p className="text-sm text-gray-600">Sign in with your email and password</p>
         </div>
 
-        {!showOtpInput ? (
-          <form onSubmit={handleSendOtp} className="space-y-6">
-            <div>
-              <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-2">
-                Phone Number
-              </label>
-              <input
-                id="phone"
-                type="tel"
-                value={phoneNumber}
-                onChange={(e) => setPhoneNumber(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none transition-all"
-                placeholder="+91 98765 43210"
-                required
-              />
-            </div>
+        <form onSubmit={onSubmit} className="space-y-4">
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="you@example.com"
+            className="w-full border rounded-lg px-4 py-3"
+            required
+          />
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="Password"
+            className="w-full border rounded-lg px-4 py-3"
+            required
+          />
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full bg-purple-600 text-white rounded-lg py-3 disabled:opacity-70"
+          >
+            {loading ? 'Signing in...' : 'Login'}
+          </button>
+        </form>
 
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="w-full py-3 bg-purple-600 text-white font-semibold rounded-lg hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isLoading ? 'Sending OTP...' : 'Send OTP'}
-            </button>
-          </form>
-        ) : (
-          <form onSubmit={handleVerifyOtp} className="space-y-6">
-            <div>
-              <label htmlFor="otp" className="block text-sm font-medium text-gray-700 mb-2">
-                OTP
-              </label>
-              <input
-                id="otp"
-                type="text"
-                value={otp}
-                onChange={(e) => setOtp(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none transition-all"
-                placeholder="Enter OTP"
-                maxLength={6}
-                required
-              />
-              <p className="mt-2 text-sm text-gray-500">
-                OTP sent to <span className="font-semibold">{phoneNumber}</span>
-              </p>
-            </div>
+        <div className="flex items-center justify-between text-sm">
+          <Link href="/forgot-password" className="text-purple-600 font-medium">
+            Forgot password?
+          </Link>
+          <Link href="/register" className="text-purple-600 font-medium">
+            Create account
+          </Link>
+        </div>
 
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="w-full py-3 bg-purple-600 text-white font-semibold rounded-lg hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isLoading ? 'Verifying OTP...' : 'Verify OTP'}
-            </button>
-
+        <div className="border-t pt-4 space-y-2">
+          <p className="text-xs text-gray-500">Auth cookie quick test</p>
+          <div className="flex gap-2">
             <button
               type="button"
-              onClick={() => setShowOtpInput(false)}
-              className="w-full py-3 text-gray-600 font-semibold rounded-lg hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-all"
+              onClick={checkCurrentUser}
+              disabled={meLoading}
+              className="flex-1 border border-gray-300 rounded-lg py-2 text-sm"
             >
-              Change Phone Number
+              {meLoading ? 'Checking...' : 'Check /auth/me'}
             </button>
-          </form>
-        )}
-
+            <button
+              type="button"
+              onClick={logout}
+              className="flex-1 border border-red-300 text-red-600 rounded-lg py-2 text-sm"
+            >
+              Logout
+            </button>
+          </div>
+          {meData && (
+            <pre className="text-xs bg-gray-100 p-2 rounded overflow-x-auto">
+              {JSON.stringify(meData, null, 2)}
+            </pre>
+          )}
+        </div>
       </div>
     </div>
-  )
+  );
 }

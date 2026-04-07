@@ -1,10 +1,11 @@
 import secrets
 import string
+import hashlib
 from datetime import datetime, timedelta
 from typing import Optional, List
 
 import jwt
-from fastapi import HTTPException, Depends
+from fastapi import HTTPException, Depends, Request, Response
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from passlib.context import CryptContext
 from pydantic import EmailStr
@@ -17,6 +18,7 @@ from app.models.user import RoleEnum
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 security = HTTPBearer()
 optional_security = HTTPBearer(auto_error=False)
+AUTH_COOKIE_NAME = "access_token"
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Verify if a plain password matches a hashed password."""
@@ -36,6 +38,27 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     to_encode.update({"exp": expire, "type": "access"})
     encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm="HS256")
     return encoded_jwt
+
+
+def set_auth_cookie(response: Response, token: str) -> None:
+    max_age = settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60
+    response.set_cookie(
+        key=AUTH_COOKIE_NAME,
+        value=token,
+        httponly=True,
+        secure=settings.is_production,
+        samesite="none" if settings.is_production else "lax",
+        max_age=max_age,
+        path="/",
+    )
+
+
+def clear_auth_cookie(response: Response) -> None:
+    response.delete_cookie(
+        key=AUTH_COOKIE_NAME,
+        path="/",
+        samesite="none" if settings.is_production else "lax",
+    )
 
 
 def create_refresh_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
@@ -73,6 +96,14 @@ def decode_refresh_token(token: str) -> dict:
     except jwt.InvalidTokenError:
         raise HTTPException(status_code=401, detail="Invalid refresh token")
 
+
+def generate_password_reset_token() -> str:
+    return secrets.token_urlsafe(48)
+
+
+def hash_reset_token(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
 def generate_otp(length: int = 6) -> str:
     """Generate a numeric OTP of the specified length."""
     digits = string.digits
@@ -103,9 +134,24 @@ def verify_otp(identifier: str, otp: str) -> bool:
     
     return False
 
-def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security), db: Session = Depends(get_db)):
+def _extract_token_from_request(request: Request) -> Optional[str]:
+    cookie_token = request.cookies.get(AUTH_COOKIE_NAME)
+    if not cookie_token:
+        return None
+    if cookie_token.lower().startswith("bearer "):
+        return cookie_token.split(" ", 1)[1].strip()
+    return cookie_token
+
+
+def get_current_user(
+    request: Request,
+    credentials: HTTPAuthorizationCredentials | None = Depends(optional_security),
+    db: Session = Depends(get_db),
+):
     """Get the current user from the JWT token."""
-    token = credentials.credentials
+    token = credentials.credentials if credentials else _extract_token_from_request(request)
+    if not token:
+        raise HTTPException(status_code=401, detail="Not authenticated")
     try:
         payload = decode_access_token(token)
         user_id: int = payload.get("user_id")
@@ -122,13 +168,14 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(securit
 
 
 def get_current_user_optional(
+    request: Request,
     credentials: HTTPAuthorizationCredentials | None = Depends(optional_security),
     db: Session = Depends(get_db),
 ):
-    if credentials is None:
+    token = credentials.credentials if credentials else _extract_token_from_request(request)
+    if not token:
         return None
 
-    token = credentials.credentials
     try:
         payload = decode_access_token(token)
         user_id: int = payload.get("user_id")

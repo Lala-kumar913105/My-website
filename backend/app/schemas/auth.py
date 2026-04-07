@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, EmailStr
 from typing import Optional
 
 class PhoneNumber(BaseModel):
@@ -29,3 +29,52 @@ class OTPResponse(BaseModel):
     verified: bool = False
     token: Optional[str] = None
     refresh_token: Optional[str] = None
+
+
+class EmailRegisterRequest(BaseModel):
+    email: EmailStr
+    password: str = Field(..., min_length=8, max_length=128)
+    full_name: Optional[str] = Field(default=None, max_length=120)
+
+
+class EmailLoginRequest(BaseModel):
+    email: EmailStr
+    password: str = Field(..., min_length=8, max_length=128)
+
+
+class AuthUser(BaseModel):
+    id: int
+    email: Optional[EmailStr] = None
+    full_name: Optional[str] = None
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    role: str
+
+    class Config:
+        from_attributes = True
+
+
+class AuthResponse(BaseModel):
+    message: str
+    user: AuthUser
+    access_token: Optional[str] = None
+    token_type: str = "bearer"
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+
+class ForgotPasswordResponse(BaseModel):
+    message: str
+    reset_token: Optional[str] = None
+    reset_url: Optional[str] = None
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str = Field(..., min_length=16)
+    new_password: str = Field(..., min_length=8, max_length=128)
+
+
+class MessageResponse(BaseModel):
+    message: str

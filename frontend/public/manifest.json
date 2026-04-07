@@ -1,9 +1,20 @@
 {
-  "name": "EcomEase Super App",
-  "short_name": "EcomEase",
-  "description": "Marketplace + service booking super app",
+  "name": "Zivolf",
+  "short_name": "Zivolf",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#0f172a",
-  "theme_color": "#7c3aed"
+  "background_color": "#000000",
+  "theme_color": "#000000",
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
 }

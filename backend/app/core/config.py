@@ -4,9 +4,11 @@ from typing import List
 class Settings(BaseSettings):
     PROJECT_NAME: str = "E-commerce API"
     PROJECT_VERSION: str = "1.0.0"
+    ENVIRONMENT: str = "development"
     
     # Database settings
     DATABASE_URL: str = "sqlite:///./ecommerce.db"
+    FRONTEND_URL: str = "http://localhost:3000"
     
     # CORS settings (comma-separated string in .env)
     CORS_ORIGINS: str = ""
@@ -30,12 +32,17 @@ class Settings(BaseSettings):
     @property
     def cors_origins_list(self) -> List[str]:
         if not self.CORS_ORIGINS:
-            return []
+            return [self.FRONTEND_URL]
         sanitized = self.CORS_ORIGINS.strip()
         if sanitized.startswith("[") and sanitized.endswith("]"):
             sanitized = sanitized.strip("[]")
-        return [origin.strip().strip("\"") for origin in sanitized.split(",") if origin.strip()]
+        origins = [origin.strip().strip("\"") for origin in sanitized.split(",") if origin.strip()]
+        if self.FRONTEND_URL not in origins:
+            origins.append(self.FRONTEND_URL)
+        return origins
+
+    @property
+    def is_production(self) -> bool:
+        return self.ENVIRONMENT.lower() == "production"
 
 settings = Settings()
-
-print(f"Loaded SECRET_KEY from .env: {settings.SECRET_KEY[:4]}***")
