@@ -1,5 +1,10 @@
-export const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL?.trim() || "https://api.zivolf.com";
+const configuredApiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL?.trim();
+
+if (!configuredApiBaseUrl && typeof console !== "undefined") {
+  console.error("NEXT_PUBLIC_API_BASE_URL is missing. Falling back to https://api.zivolf.com");
+}
+
+export const API_BASE_URL = configuredApiBaseUrl || "https://api.zivolf.com";
 
 type RequestOptions = {
   method?: "GET" | "POST";

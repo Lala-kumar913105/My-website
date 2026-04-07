@@ -3,9 +3,14 @@ const API_BASE_URL =
   process.env &&
   process.env.NEXT_PUBLIC_API_BASE_URL
     ? process.env.NEXT_PUBLIC_API_BASE_URL
-    : window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
-      ? "http://localhost:8000"
-      : "https://api.zivolf.com";
+    : "https://api.zivolf.com";
+
+if (
+  (typeof process === "undefined" || !process.env || !process.env.NEXT_PUBLIC_API_BASE_URL) &&
+  typeof console !== "undefined"
+) {
+  console.error("NEXT_PUBLIC_API_BASE_URL is missing. Falling back to https://api.zivolf.com");
+}
 const API_BASE = `${API_BASE_URL.replace(/\/$/, "")}/api/v1`;
 
 async function handleCheckout(userId, statusEl, refreshCart) {

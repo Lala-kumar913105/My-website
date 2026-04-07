@@ -23,8 +23,17 @@ function HomeContent() {
   const [coinBalance, setCoinBalance] = useState<number | null>(null)
   const router = useRouter()
   const searchParams = useSearchParams()
-const API = process.env.NEXT_PUBLIC_API_BASE_URL || (process.env.NODE_ENV === 'production' ? 'https://api.zivolf.com' : 'http://localhost:8000')
-const categoryId = searchParams.get('category')
+  const API = useMemo(() => {
+    const configuredBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL?.trim()
+    if (!configuredBaseUrl) {
+      console.error('NEXT_PUBLIC_API_BASE_URL is missing. Falling back to https://api.zivolf.com')
+      return 'https://api.zivolf.com'
+    }
+
+    const normalized = configuredBaseUrl.replace(/\/$/, '')
+    return normalized.replace(/\/api\/v1\/?$/, '')
+  }, [])
+  const categoryId = searchParams.get('category')
 
   useEffect(() => {
     const storedToken = localStorage.getItem('token')

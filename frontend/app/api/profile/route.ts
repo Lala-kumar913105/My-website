@@ -1,9 +1,6 @@
 import { NextResponse } from 'next/server'
 
-const FALLBACK_API =
-  process.env.NODE_ENV === 'production'
-    ? 'https://api.zivolf.com'
-    : 'http://localhost:8000'
+const FALLBACK_API = 'https://api.zivolf.com'
 const REQUEST_TIMEOUT_MS = 5000
 
 const normalizeBaseUrl = (rawUrl: string) => {
@@ -20,6 +17,14 @@ const parseJsonResponse = async (response: Response) => {
     throw new Error(text || 'Invalid response format')
   }
   return response.json()
+}
+
+const resolveApiBaseUrl = (scope: 'profile:get' | 'profile:put') => {
+  const rawBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL?.trim()
+  if (!rawBaseUrl) {
+    console.error(`[${scope}] NEXT_PUBLIC_API_BASE_URL is missing. Falling back to https://api.zivolf.com`)
+  }
+  return normalizeBaseUrl(rawBaseUrl || FALLBACK_API)
 }
 
 const fetchAccessToken = async (baseUrl: string, phoneNumber: string, otp: string) => {
@@ -56,9 +61,7 @@ export async function GET(request: Request) {
   const phoneNumber = request.headers.get('x-phone-number')?.trim()
   const otp = request.headers.get('x-otp')?.trim()
 
-  const rawBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || process.env.API_URL || FALLBACK_API
-
-  const baseUrl = normalizeBaseUrl(rawBaseUrl)
+  const baseUrl = resolveApiBaseUrl('profile:get')
 
   if (!token && phoneNumber && otp) {
     const freshToken = await fetchAccessToken(baseUrl, phoneNumber, otp)
@@ -149,9 +152,7 @@ export async function PUT(request: Request) {
   const phoneNumber = request.headers.get('x-phone-number')?.trim()
   const otp = request.headers.get('x-otp')?.trim()
 
-  const rawBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || process.env.API_URL || FALLBACK_API
-
-  const baseUrl = normalizeBaseUrl(rawBaseUrl)
+  const baseUrl = resolveApiBaseUrl('profile:put')
 
   if (!token && phoneNumber && otp) {
     const freshToken = await fetchAccessToken(baseUrl, phoneNumber, otp)

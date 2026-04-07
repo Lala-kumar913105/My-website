@@ -40,9 +40,8 @@ export default function ProfilePage() {
   const apiBaseUrl = useMemo(() => {
     const rawBase = process.env.NEXT_PUBLIC_API_BASE_URL?.trim()
     if (!rawBase) {
-      return process.env.NODE_ENV === 'production'
-        ? 'https://api.zivolf.com'
-        : 'http://localhost:8000'
+      console.error('NEXT_PUBLIC_API_BASE_URL is missing. Falling back to https://api.zivolf.com')
+      return 'https://api.zivolf.com'
     }
     const normalized = rawBase.replace(/\/$/, '')
     return normalized.replace(/\/api\/v1\/?$/, '')
