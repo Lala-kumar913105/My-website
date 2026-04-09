@@ -1,10 +1,19 @@
+const FALLBACK_API_BASE_URL = "https://api.zivolf.com";
+
+const normalizeApiBaseUrl = (rawUrl: string) => {
+  const trimmed = rawUrl.trim().replace(/\/$/, "");
+  const withoutVersionSuffix = trimmed.replace(/\/api\/v1\/?$/, "");
+  return withoutVersionSuffix.replace(/^http:\/\//i, "https://");
+};
+
 const configuredApiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL?.trim();
+const resolvedApiBaseUrl = configuredApiBaseUrl || FALLBACK_API_BASE_URL;
 
 if (!configuredApiBaseUrl && typeof console !== "undefined") {
   console.error("NEXT_PUBLIC_API_BASE_URL is missing. Falling back to https://api.zivolf.com");
 }
 
-export const API_BASE_URL = configuredApiBaseUrl || "https://api.zivolf.com";
+export const API_BASE_URL = normalizeApiBaseUrl(resolvedApiBaseUrl);
 
 type RequestOptions = {
   method?: "GET" | "POST";
