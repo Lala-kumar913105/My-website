@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+import secrets
 
 from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy.orm import Session
@@ -55,7 +56,9 @@ def _serialize_auth_user(user: User) -> AuthUser:
 
 @router.post("/register", response_model=AuthResponse)
 def register_with_email(payload: EmailRegisterRequest, response: Response, db: Session = Depends(get_db)):
-    existing_user = crud.get_user_by_email(db, email=payload.email)
+    normalized_email = payload.email.strip().lower()
+
+    existing_user = crud.get_user_by_email(db, email=normalized_email)
     if existing_user:
         raise HTTPException(status_code=400, detail="Email already registered")
 
@@ -67,7 +70,7 @@ def register_with_email(payload: EmailRegisterRequest, response: Response, db: S
         last_name = name_parts[1] if len(name_parts) > 1 else None
 
     user = User(
-        email=payload.email,
+        email=normalized_email,
         hashed_password=get_password_hash(payload.password),
         first_name=first_name,
         last_name=last_name,
@@ -91,12 +94,20 @@ def register_with_email(payload: EmailRegisterRequest, response: Response, db: S
 
 @router.post("/login", response_model=AuthResponse)
 def login_with_email(payload: EmailLoginRequest, response: Response, db: Session = Depends(get_db)):
-    user = crud.get_user_by_email(db, email=payload.email)
+    normalized_email = payload.email.strip().lower()
+    user = crud.get_user_by_email(db, email=normalized_email)
     if not user:
         raise HTTPException(status_code=401, detail="Invalid email or password")
 
-    stored_hash = user.hashed_password or user.password
-    if not stored_hash or not verify_password(payload.password, stored_hash):
+    is_valid_password = False
+    if user.hashed_password:
+        is_valid_password = verify_password(payload.password, user.hashed_password)
+    elif user.password:
+        # Backward compatibility for legacy rows that stored plain password.
+        # On successful login we transparently migrate to hashed_password.
+        is_valid_password = secrets.compare_digest(payload.password, user.password)
+
+    if not is_valid_password:
         raise HTTPException(status_code=401, detail="Invalid email or password")
 
     if user.hashed_password is None and user.password:
@@ -129,7 +140,8 @@ def read_auth_me(current_user: User = Depends(get_current_user)):
 
 @router.post("/forgot-password", response_model=ForgotPasswordResponse)
 def forgot_password(payload: ForgotPasswordRequest, db: Session = Depends(get_db)):
-    user = crud.get_user_by_email(db, email=payload.email)
+    normalized_email = payload.email.strip().lower()
+    user = crud.get_user_by_email(db, email=normalized_email)
 
     generic_message = "If an account exists for this email, a reset link has been generated"
     if not user:
@@ -144,7 +156,7 @@ def forgot_password(payload: ForgotPasswordRequest, db: Session = Depends(get_db
     reset_url = f"{settings.FRONTEND_URL.rstrip('/')}/reset-password?token={raw_token}"
 
     if settings.is_production:
-        return ForgotPasswordResponse(message=generic_message, reset_url=reset_url)
+        return ForgotPasswordResponse(message=generic_message)
 
     return ForgotPasswordResponse(
         message=generic_message,
