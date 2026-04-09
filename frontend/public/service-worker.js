@@ -1,15 +1,14 @@
-const CACHE_NAME = "zivolf-cache-v1";
-const CORE_ASSETS = [
-  "/",
-  "/manifest.json",
-  "/offline",
-  "/icons/icon-192.png",
-  "/icons/icon-512.png",
-];
+const CACHE_VERSION = "v3";
+const CACHE_NAME = `zivolf-static-${CACHE_VERSION}`;
+const LEGACY_CACHE_PREFIXES = ["zivolf-cache-", "zivolf-static-"];
+const CORE_ASSETS = ["/offline"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(CORE_ASSETS))
+    caches
+      .open(CACHE_NAME)
+      .then((cache) => cache.addAll(CORE_ASSETS))
+      .catch(() => undefined)
   );
   self.skipWaiting();
 });
@@ -19,7 +18,10 @@ self.addEventListener("activate", (event) => {
     caches.keys().then((keys) =>
       Promise.all(
         keys.map((key) => {
-          if (key !== CACHE_NAME) {
+          const isLegacyCache = LEGACY_CACHE_PREFIXES.some((prefix) =>
+            key.startsWith(prefix)
+          );
+          if (key !== CACHE_NAME && isLegacyCache) {
             return caches.delete(key);
           }
           return undefined;
@@ -31,19 +33,40 @@ self.addEventListener("activate", (event) => {
 });
 
 self.addEventListener("fetch", (event) => {
-  if (event.request.method !== "GET") return;
+  const req = event.request;
+  const url = new URL(req.url);
+
+  if (req.method !== "GET") return;
+
+  // Never cache API calls
+  if (url.hostname === "api.zivolf.com" || url.pathname.startsWith("/api/")) {
+    return;
+  }
+
+  // Never cache Next.js build files aggressively
+  if (url.pathname.startsWith("/_next/")) {
+    event.respondWith(fetch(req, { cache: "no-store" }));
+    return;
+  }
+
+  // Only handle same-origin requests in this SW
+  if (url.origin !== self.location.origin) {
+    return;
+  }
+
+  // Navigation requests: network-first + offline page fallback
+  if (req.mode === "navigate") {
+    event.respondWith(
+      fetch(req)
+        .then((response) => response)
+        .catch(() => caches.match("/offline"))
+    );
+    return;
+  }
+
+  // Minimal offline support: only serve explicitly precached assets.
   event.respondWith(
-    caches.match(event.request).then((cached) => {
-      if (cached) return cached;
-      return fetch(event.request)
-        .then((response) => {
-          if (!response || response.status !== 200) return response;
-          const cloned = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, cloned));
-          return response;
-        })
-        .catch(() => caches.match("/offline"));
-    })
+    caches.match(req).then((cached) => cached || fetch(req))
   );
 });
 
