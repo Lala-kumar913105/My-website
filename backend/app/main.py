@@ -11,7 +11,10 @@ import os
 
 Base.metadata.create_all(bind=engine)
 
-app = FastAPI(title=settings.PROJECT_NAME, version=settings.PROJECT_VERSION)
+app = FastAPI(
+    title=settings.PROJECT_NAME,
+    version=settings.PROJECT_VERSION
+)
 
 app.add_middleware(RateLimitMiddleware)
 
@@ -25,6 +28,9 @@ def seed_default_categories() -> None:
     finally:
         db.close()
 
+# Debug print - startup me check karne ke liye kaunse origins load ho rahe hain
+print("CORS ORIGINS =>", settings.cors_origins_list)
+
 # CORS Configuration
 app.add_middleware(
     CORSMiddleware,
@@ -34,7 +40,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Serve static files from /uploads directory (legacy)
+# Serve static files from /uploads directory
 UPLOAD_DIR = "uploads"
 if not os.path.exists(UPLOAD_DIR):
     os.makedirs(UPLOAD_DIR)
@@ -47,15 +53,28 @@ if not os.path.exists(MEDIA_PRODUCTS_DIR):
     os.makedirs(MEDIA_PRODUCTS_DIR)
 app.mount("/media", StaticFiles(directory=MEDIA_DIR), name="media")
 
-# Serve static files from /static directory (QR codes, etc.)
+# Serve static files from /static directory
 STATIC_DIR = "static"
 QR_DIR = os.path.join(STATIC_DIR, "qr")
 if not os.path.exists(QR_DIR):
     os.makedirs(QR_DIR)
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
+# API routes
 app.include_router(api.router, prefix="/api/v1")
 
 @app.get("/")
 def read_root():
-    return {"message": "Welcome to the E-commerce API"}
+    return {
+        "message": "Welcome to the E-commerce API",
+        "project_name": settings.PROJECT_NAME,
+        "version": settings.PROJECT_VERSION,
+        "environment": settings.ENVIRONMENT
+    }
+
+@app.get("/health")
+def health_check():
+    return {
+        "status": "ok",
+        "message": "Backend is running"
+    }
