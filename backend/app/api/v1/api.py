@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 
 from app.api.v1 import (
+    auth,
     users,
     sellers,
     products,
@@ -30,10 +31,9 @@ from app.api.v1 import (
     search,
     profiles,
     social,
-    user_activity
+    user_activity,
 )
 
-from app.api import auth
 from app.api import upload
 
 router = APIRouter()
@@ -69,7 +69,11 @@ router.include_router(profiles.router, prefix="/profile", tags=["profile"])
 router.include_router(social.router, prefix="/social", tags=["social"])
 
 # Recommendations (personalized)
-router.include_router(recommendations_personalized.router, prefix="/recommendations", tags=["recommendations"])
+router.include_router(
+    recommendations_personalized.router,
+    prefix="/recommendations",
+    tags=["recommendations"],
+)
 
 # Payments
 router.include_router(payments.router, prefix="/payments", tags=["payments"])
@@ -87,7 +91,11 @@ router.include_router(bookings.router, prefix="/bookings", tags=["bookings"])
 router.include_router(reviews.router, prefix="/reviews", tags=["reviews"])
 
 # Delivery
-router.include_router(delivery_partners.router, prefix="/delivery-partners", tags=["delivery-partners"])
+router.include_router(
+    delivery_partners.router,
+    prefix="/delivery-partners",
+    tags=["delivery-partners"],
+)
 router.include_router(deliveries.router, prefix="/deliveries", tags=["deliveries"])
 
 # Coupons
