@@ -35,13 +35,13 @@ class OTPResponse(BaseModel):
 
 class EmailRegisterRequest(BaseModel):
     email: EmailStr
-    password: str = Field(..., min_length=8, max_length=128)
+    password: str = Field(..., min_length=8)
     full_name: Optional[str] = Field(default=None, max_length=120)
 
 
 class EmailLoginRequest(BaseModel):
     email: EmailStr
-    password: str = Field(..., min_length=8, max_length=128)
+    password: str = Field(..., min_length=8)
 
 
 class AuthUser(BaseModel):
@@ -76,7 +76,7 @@ class ForgotPasswordResponse(BaseModel):
 
 class ResetPasswordRequest(BaseModel):
     token: str = Field(..., min_length=16)
-    new_password: str = Field(..., min_length=8, max_length=128)
+    new_password: str = Field(..., min_length=8)
 
 
 class MessageResponse(BaseModel):

@@ -18,6 +18,7 @@ from app.core.security import (
     hash_reset_token,
     set_auth_cookie,
     store_otp,
+    validate_password_length,
     verify_otp,
     verify_password,
 )
@@ -63,6 +64,11 @@ def _ensure_profile(db: Session, user_id: int, full_name: str | None = None) -> 
 
 @router.post("/register", response_model=AuthResponse, status_code=status.HTTP_201_CREATED)
 def register_with_email(payload: EmailRegisterRequest, response: Response, db: Session = Depends(get_db)):
+    try:
+        validate_password_length(payload.password)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
     normalized_email = payload.email.strip().lower()
     existing_user = crud.get_user_by_email(db, email=normalized_email)
     if existing_user:
@@ -183,6 +189,11 @@ def forgot_password(payload: ForgotPasswordRequest, db: Session = Depends(get_db
 
 @router.post("/reset-password", response_model=MessageResponse)
 def reset_password(payload: ResetPasswordRequest, db: Session = Depends(get_db)):
+    try:
+        validate_password_length(payload.new_password)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
     token_hash = hash_reset_token(payload.token)
     user = db.query(User).filter(User.reset_password_token_hash == token_hash).first()
     if not user:

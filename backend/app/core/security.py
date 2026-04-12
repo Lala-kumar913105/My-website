@@ -20,6 +20,23 @@ security = HTTPBearer()
 optional_security = HTTPBearer(auto_error=False)
 AUTH_COOKIE_NAME = "access_token"
 JWT_ALGORITHM = "HS256"
+PASSWORD_MIN_LENGTH = 8
+PASSWORD_MAX_LENGTH = 72
+
+
+def validate_password_length(password: str) -> None:
+    """Validate password length constraints before bcrypt operations."""
+    if not password:
+        raise ValueError("Password is required")
+
+    if len(password) < PASSWORD_MIN_LENGTH:
+        raise ValueError(f"Password must be at least {PASSWORD_MIN_LENGTH} characters long")
+
+    # bcrypt safely supports up to 72 bytes of password input.
+    if len(password) > PASSWORD_MAX_LENGTH or len(password.encode("utf-8")) > PASSWORD_MAX_LENGTH:
+        raise ValueError(
+            f"Password must be {PASSWORD_MAX_LENGTH} characters or fewer for bcrypt compatibility"
+        )
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Verify if a plain password matches a hashed password."""
@@ -33,6 +50,7 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 
 def get_password_hash(password: str) -> str:
     """Hash a password using bcrypt."""
+    validate_password_length(password)
     return pwd_context.hash(password)
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
