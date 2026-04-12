@@ -18,6 +18,7 @@ export const API_BASE_URL = normalizeApiBaseUrl(resolvedApiBaseUrl);
 type RequestOptions = {
   method?: "GET" | "POST";
   body?: unknown;
+  useCredentials?: boolean;
 };
 
 export async function authRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
@@ -26,7 +27,7 @@ export async function authRequest<T>(path: string, options: RequestOptions = {})
     headers: {
       "Content-Type": "application/json",
     },
-    credentials: "include",
+    credentials: options.useCredentials ? "include" : "omit",
     body: options.body ? JSON.stringify(options.body) : undefined,
   });
 

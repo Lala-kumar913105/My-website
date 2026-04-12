@@ -11,8 +11,8 @@ class Settings(BaseSettings):
     DATABASE_URL: str = "sqlite:///./ecommerce.db"
 
     # Frontend / CORS
-    FRONTEND_URL: str = "http://localhost:3000"
-    CORS_ORIGINS: str = ""
+    FRONTEND_URL: str = "https://www.zivolf.com"
+    CORS_ORIGINS: str = "https://www.zivolf.com,https://zivolf.com,http://localhost:3000"
 
     # JWT
     SECRET_KEY: str
@@ -33,9 +33,19 @@ class Settings(BaseSettings):
 
     @property
     def cors_origins_list(self) -> List[str]:
+        required_origins = [
+            "https://www.zivolf.com",
+            "https://zivolf.com",
+            "http://localhost:3000",
+        ]
+
         if not self.CORS_ORIGINS.strip():
             frontend = self.FRONTEND_URL.strip()
-            return [frontend] if frontend else []
+            origins = [frontend] if frontend else []
+            for required_origin in required_origins:
+                if required_origin not in origins:
+                    origins.append(required_origin)
+            return origins
 
         sanitized = self.CORS_ORIGINS.strip()
 
@@ -51,6 +61,10 @@ class Settings(BaseSettings):
         frontend = self.FRONTEND_URL.strip()
         if frontend and frontend not in origins:
             origins.append(frontend)
+
+        for required_origin in required_origins:
+            if required_origin not in origins:
+                origins.append(required_origin)
 
         return origins
 

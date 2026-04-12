@@ -51,7 +51,7 @@ export default function LoginPage() {
   const checkCurrentUser = async () => {
     setMeLoading(true);
     try {
-      const data = await authRequest<AuthMeResponse>('/api/v1/auth/me');
+      const data = await authRequest<AuthMeResponse>('/api/v1/auth/me', { useCredentials: true });
       setMeData(data);
       toast.success('Fetched current user from cookie session');
     } catch (error) {
@@ -64,7 +64,7 @@ export default function LoginPage() {
 
   const logout = async () => {
     try {
-      await authRequest<{ message: string }>('/api/v1/auth/logout', { method: 'POST' });
+      await authRequest<{ message: string }>('/api/v1/auth/logout', { method: 'POST', useCredentials: true });
       clearLegacyToken();
       setMeData(null);
       toast.success('Logged out');

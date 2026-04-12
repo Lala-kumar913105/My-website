@@ -23,6 +23,10 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         return settings.RATE_LIMIT_MAX_REQUESTS
 
     async def dispatch(self, request: Request, call_next):
+        # Always let CORS preflight pass through quickly.
+        if request.method == "OPTIONS":
+            return await call_next(request)
+
         client_ip = request.client.host if request.client else "unknown"
         key = f"{client_ip}:{request.url.path}"
         window_seconds = settings.RATE_LIMIT_WINDOW_SECONDS
