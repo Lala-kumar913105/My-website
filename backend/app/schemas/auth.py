@@ -1,5 +1,6 @@
-from pydantic import BaseModel, Field, EmailStr
 from typing import Optional
+
+from pydantic import BaseModel, EmailStr, Field
 
 class PhoneNumber(BaseModel):
     phone_number: str = Field(..., min_length=8, max_length=15, pattern=r"^\+?\d{8,15}$")
@@ -10,6 +11,7 @@ class OTPVerification(BaseModel):
 
 class Token(BaseModel):
     access_token: str
+    refresh_token: Optional[str] = None
     token_type: str
 
 
@@ -27,7 +29,7 @@ class LoginResponse(BaseModel):
 class OTPResponse(BaseModel):
     message: str
     verified: bool = False
-    token: Optional[str] = None
+    access_token: Optional[str] = None
     refresh_token: Optional[str] = None
 
 
@@ -58,6 +60,7 @@ class AuthResponse(BaseModel):
     message: str
     user: AuthUser
     access_token: Optional[str] = None
+    refresh_token: Optional[str] = None
     token_type: str = "bearer"
 
 

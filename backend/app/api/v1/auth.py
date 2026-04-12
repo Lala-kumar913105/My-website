@@ -1,43 +1,44 @@
 from datetime import datetime, timedelta
 import secrets
 
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.orm import Session
-from app import schemas, crud
-from app.db.session import get_db
+
+from app import crud, schemas
+from app.core.config import settings
 from app.core.security import (
-    generate_otp,
-    store_otp,
-    verify_otp,
+    clear_auth_cookie,
     create_access_token,
     create_refresh_token,
     decode_refresh_token,
-    get_password_hash,
-    verify_password,
-    set_auth_cookie,
-    clear_auth_cookie,
-    get_current_user,
+    generate_otp,
     generate_password_reset_token,
+    get_current_user,
+    get_password_hash,
     hash_reset_token,
+    set_auth_cookie,
+    store_otp,
+    verify_otp,
+    verify_password,
 )
-from app.models.user import User, RoleEnum
+from app.db.session import get_db
+from app.models.user import RoleEnum, User
 from app.schemas.auth import (
-    PhoneNumber,
-    OTPVerification,
-    LoginResponse,
-    OTPResponse,
-    Token,
-    RefreshRequest,
-    EmailRegisterRequest,
-    EmailLoginRequest,
     AuthResponse,
     AuthUser,
+    EmailLoginRequest,
+    EmailRegisterRequest,
     ForgotPasswordRequest,
     ForgotPasswordResponse,
-    ResetPasswordRequest,
+    LoginResponse,
     MessageResponse,
+    OTPResponse,
+    OTPVerification,
+    PhoneNumber,
+    RefreshRequest,
+    ResetPasswordRequest,
+    Token,
 )
-from app.core.config import settings
 
 router = APIRouter()
 
@@ -54,10 +55,15 @@ def _serialize_auth_user(user: User) -> AuthUser:
     )
 
 
-@router.post("/register", response_model=AuthResponse)
+def _ensure_profile(db: Session, user_id: int, full_name: str | None = None) -> None:
+    if crud.get_profile_by_user_id(db, user_id=user_id):
+        return
+    crud.create_profile(db, schemas.ProfileCreate(user_id=user_id, full_name=full_name))
+
+
+@router.post("/register", response_model=AuthResponse, status_code=status.HTTP_201_CREATED)
 def register_with_email(payload: EmailRegisterRequest, response: Response, db: Session = Depends(get_db)):
     normalized_email = payload.email.strip().lower()
-
     existing_user = crud.get_user_by_email(db, email=normalized_email)
     if existing_user:
         raise HTTPException(status_code=400, detail="Email already registered")
@@ -72,23 +78,27 @@ def register_with_email(payload: EmailRegisterRequest, response: Response, db: S
     user = User(
         email=normalized_email,
         hashed_password=get_password_hash(payload.password),
+        password=None,
         first_name=first_name,
         last_name=last_name,
         role=RoleEnum.BUYER,
+        is_active=True,
     )
     db.add(user)
     db.commit()
     db.refresh(user)
 
-    crud.create_profile(db, schemas.ProfileCreate(user_id=user.id, full_name=payload.full_name))
+    _ensure_profile(db, user.id, payload.full_name)
 
     access_token = create_access_token(data={"sub": str(user.id), "user_id": user.id})
+    refresh_token = create_refresh_token(data={"sub": str(user.id), "user_id": user.id})
     set_auth_cookie(response, access_token)
 
     return AuthResponse(
         message="Registration successful",
         user=_serialize_auth_user(user),
         access_token=access_token if not settings.is_production else None,
+        refresh_token=refresh_token if not settings.is_production else None,
     )
 
 
@@ -99,31 +109,37 @@ def login_with_email(payload: EmailLoginRequest, response: Response, db: Session
     if not user:
         raise HTTPException(status_code=401, detail="Invalid email or password")
 
+    if user.is_blocked:
+        raise HTTPException(status_code=403, detail="User account is blocked")
+
     is_valid_password = False
     if user.hashed_password:
         is_valid_password = verify_password(payload.password, user.hashed_password)
     elif user.password:
-        # Backward compatibility for legacy rows that stored plain password.
-        # On successful login we transparently migrate to hashed_password.
+        # Legacy plain-password compatibility path (migrated on successful login).
         is_valid_password = secrets.compare_digest(payload.password, user.password)
 
     if not is_valid_password:
         raise HTTPException(status_code=401, detail="Invalid email or password")
 
-    if user.hashed_password is None and user.password:
+    if not user.hashed_password and user.password:
         user.hashed_password = get_password_hash(payload.password)
         user.password = None
         db.add(user)
         db.commit()
         db.refresh(user)
 
+    _ensure_profile(db, user.id)
+
     access_token = create_access_token(data={"sub": str(user.id), "user_id": user.id})
+    refresh_token = create_refresh_token(data={"sub": str(user.id), "user_id": user.id})
     set_auth_cookie(response, access_token)
 
     return AuthResponse(
         message="Login successful",
         user=_serialize_auth_user(user),
         access_token=access_token if not settings.is_production else None,
+        refresh_token=refresh_token if not settings.is_production else None,
     )
 
 
@@ -169,7 +185,6 @@ def forgot_password(payload: ForgotPasswordRequest, db: Session = Depends(get_db
 def reset_password(payload: ResetPasswordRequest, db: Session = Depends(get_db)):
     token_hash = hash_reset_token(payload.token)
     user = db.query(User).filter(User.reset_password_token_hash == token_hash).first()
-
     if not user:
         raise HTTPException(status_code=400, detail="Invalid or expired reset token")
 
@@ -189,71 +204,61 @@ def reset_password(payload: ResetPasswordRequest, db: Session = Depends(get_db))
 
     return MessageResponse(message="Password has been reset successfully")
 
+
 @router.post("/send-otp", response_model=LoginResponse)
 def login_with_phone_number(phone: PhoneNumber, db: Session = Depends(get_db)):
-    """Send OTP to the given phone number."""
-    
-    # Check if user exists (if not, create a new user)
     user = db.query(User).filter(User.phone_number == phone.phone_number).first()
     if not user:
-        user = User(phone_number=phone.phone_number)
+        user = User(phone_number=phone.phone_number, role=RoleEnum.BUYER)
         db.add(user)
         db.commit()
         db.refresh(user)
-        crud.create_profile(db, schemas.ProfileCreate(user_id=user.id))
-    
-    # Generate and store OTP
+
+    _ensure_profile(db, user.id)
+
     otp = generate_otp()
-    store_otp(phone.phone_number, otp, expires_in=300)  # 5 minutes
-    
-    # In production, send OTP via SMS
+    store_otp(phone.phone_number, otp, expires_in=300)
     print(f"OTP for {phone.phone_number}: {otp}")
-    
-    return LoginResponse(
-        message="OTP sent successfully",
-        otp_sent=True,
-        phone_number=phone.phone_number
-    )
+
+    return LoginResponse(message="OTP sent successfully", otp_sent=True, phone_number=phone.phone_number)
+
 
 @router.post("/login-phone", response_model=LoginResponse)
 def login_with_phone_number_alias(phone: PhoneNumber, db: Session = Depends(get_db)):
-    """Backward-compatible OTP login endpoint."""
     return login_with_phone_number(phone, db)
 
+
 @router.post("/verify-otp", response_model=OTPResponse)
-def verify_otp_and_login(verification: OTPVerification, db: Session = Depends(get_db)):
-    """Verify OTP and return JWT token if successful."""
-    
-    # Verify OTP
+def verify_otp_and_login(verification: OTPVerification, response: Response, db: Session = Depends(get_db)):
     if not verify_otp(verification.phone_number, verification.otp):
         raise HTTPException(status_code=400, detail="Invalid or expired OTP")
-    
-    # Check if user exists (should exist since they completed login)
+
     user = db.query(User).filter(User.phone_number == verification.phone_number).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    
-    # Create access + refresh tokens
+
     access_token = create_access_token(data={"sub": str(user.id), "user_id": user.id})
     refresh_token = create_refresh_token(data={"sub": str(user.id), "user_id": user.id})
-    
+    set_auth_cookie(response, access_token)
+
     return OTPResponse(
         message="OTP verified successfully",
         verified=True,
-        token=access_token,
+        access_token=access_token,
         refresh_token=refresh_token,
     )
 
 
 @router.post("/refresh", response_model=Token)
 def refresh_access_token(payload: RefreshRequest, db: Session = Depends(get_db)):
-    """Issue a new access token using a refresh token."""
     token_payload = decode_refresh_token(payload.refresh_token)
     user_id = token_payload.get("user_id")
     if not user_id:
         raise HTTPException(status_code=401, detail="Invalid refresh token")
+
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+
     access_token = create_access_token(data={"sub": str(user.id), "user_id": user.id})
-    return Token(access_token=access_token, token_type="bearer")
+    return Token(access_token=access_token, refresh_token=None, token_type="bearer")
