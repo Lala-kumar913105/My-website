@@ -45,7 +45,10 @@ router = APIRouter()
 
 
 def _serialize_auth_user(user: User) -> AuthUser:
-    full_name = " ".join(part for part in [user.first_name, user.last_name] if part).strip() or None
+    full_name = " ".join(
+        part for part in [user.first_name, user.last_name] if part
+    ).strip() or None
+
     return AuthUser(
         id=user.id,
         email=user.email,
@@ -63,16 +66,21 @@ def _ensure_profile(db: Session, user_id: int, full_name: str | None = None) -> 
 
 
 @router.post("/register", response_model=AuthResponse, status_code=status.HTTP_201_CREATED)
-def register_with_email(payload: EmailRegisterRequest, response: Response, db: Session = Depends(get_db)):
-    try:
-        validate_password_length(payload.password)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
+def register_with_email(
+    payload: EmailRegisterRequest,
+    response: Response,
+    db: Session = Depends(get_db),
+):
     normalized_email = payload.email.strip().lower()
     existing_user = crud.get_user_by_email(db, email=normalized_email)
     if existing_user:
         raise HTTPException(status_code=400, detail="Email already registered")
+
+    try:
+        validate_password_length(payload.password)
+        hashed_password = get_password_hash(payload.password)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     first_name = None
     last_name = None
@@ -83,7 +91,7 @@ def register_with_email(payload: EmailRegisterRequest, response: Response, db: S
 
     user = User(
         email=normalized_email,
-        hashed_password=get_password_hash(payload.password),
+        hashed_password=hashed_password,
         password=None,
         first_name=first_name,
         last_name=last_name,
@@ -109,31 +117,42 @@ def register_with_email(payload: EmailRegisterRequest, response: Response, db: S
 
 
 @router.post("/login", response_model=AuthResponse)
-def login_with_email(payload: EmailLoginRequest, response: Response, db: Session = Depends(get_db)):
+def login_with_email(
+    payload: EmailLoginRequest,
+    response: Response,
+    db: Session = Depends(get_db),
+):
     normalized_email = payload.email.strip().lower()
     user = crud.get_user_by_email(db, email=normalized_email)
     if not user:
         raise HTTPException(status_code=401, detail="Invalid email or password")
 
-    if user.is_blocked:
+    if getattr(user, "is_blocked", False):
         raise HTTPException(status_code=403, detail="User account is blocked")
 
     is_valid_password = False
-    if user.hashed_password:
-        is_valid_password = verify_password(payload.password, user.hashed_password)
-    elif user.password:
-        # Legacy plain-password compatibility path (migrated on successful login).
-        is_valid_password = secrets.compare_digest(payload.password, user.password)
+
+    try:
+        if user.hashed_password:
+            is_valid_password = verify_password(payload.password, user.hashed_password)
+        elif user.password:
+            # Legacy plain-password compatibility path
+            is_valid_password = secrets.compare_digest(payload.password, user.password)
+    except ValueError:
+        is_valid_password = False
 
     if not is_valid_password:
         raise HTTPException(status_code=401, detail="Invalid email or password")
 
     if not user.hashed_password and user.password:
-        user.hashed_password = get_password_hash(payload.password)
-        user.password = None
-        db.add(user)
-        db.commit()
-        db.refresh(user)
+        try:
+            user.hashed_password = get_password_hash(payload.password)
+            user.password = None
+            db.add(user)
+            db.commit()
+            db.refresh(user)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     _ensure_profile(db, user.id)
 
@@ -206,7 +225,11 @@ def reset_password(payload: ResetPasswordRequest, db: Session = Depends(get_db))
         db.commit()
         raise HTTPException(status_code=400, detail="Invalid or expired reset token")
 
-    user.hashed_password = get_password_hash(payload.new_password)
+    try:
+        user.hashed_password = get_password_hash(payload.new_password)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
     user.password = None
     user.reset_password_token_hash = None
     user.reset_password_expires_at = None
@@ -219,6 +242,7 @@ def reset_password(payload: ResetPasswordRequest, db: Session = Depends(get_db))
 @router.post("/send-otp", response_model=LoginResponse)
 def login_with_phone_number(phone: PhoneNumber, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.phone_number == phone.phone_number).first()
+
     if not user:
         user = User(phone_number=phone.phone_number, role=RoleEnum.BUYER)
         db.add(user)
@@ -231,7 +255,11 @@ def login_with_phone_number(phone: PhoneNumber, db: Session = Depends(get_db)):
     store_otp(phone.phone_number, otp, expires_in=300)
     print(f"OTP for {phone.phone_number}: {otp}")
 
-    return LoginResponse(message="OTP sent successfully", otp_sent=True, phone_number=phone.phone_number)
+    return LoginResponse(
+        message="OTP sent successfully",
+        otp_sent=True,
+        phone_number=phone.phone_number,
+    )
 
 
 @router.post("/login-phone", response_model=LoginResponse)
@@ -240,7 +268,11 @@ def login_with_phone_number_alias(phone: PhoneNumber, db: Session = Depends(get_
 
 
 @router.post("/verify-otp", response_model=OTPResponse)
-def verify_otp_and_login(verification: OTPVerification, response: Response, db: Session = Depends(get_db)):
+def verify_otp_and_login(
+    verification: OTPVerification,
+    response: Response,
+    db: Session = Depends(get_db),
+):
     if not verify_otp(verification.phone_number, verification.otp):
         raise HTTPException(status_code=400, detail="Invalid or expired OTP")
 
