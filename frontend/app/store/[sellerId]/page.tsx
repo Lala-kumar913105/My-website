@@ -2,7 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import ListingCard, { Listing } from '@/app/components/ListingCard';
+import ListingCard from './components/ListingCard';
 import useSWR from 'swr';
 
 interface Seller {
