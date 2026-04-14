@@ -2,8 +2,8 @@
 
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useI18n } from "./i18n/context";
-import ListingCard from './components/ListingCard';
+import { useI18n } from "../i18n/context";
+import ListingCard, { Listing } from "../components/ListingCard";
 function ServicesContent() {
   const { t } = useI18n();
   const router = useRouter();
