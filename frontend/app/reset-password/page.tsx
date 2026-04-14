@@ -4,7 +4,7 @@ import { FormEvent, Suspense, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
-import { authRequest } from '@/lib/auth';
+import { authRequest } from '../../lib/auth';
 
 function ResetPasswordForm() {
   const searchParams = useSearchParams();

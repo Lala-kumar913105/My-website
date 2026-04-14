@@ -3,7 +3,7 @@
 import { FormEvent, useState } from 'react';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
-import { authRequest, persistTokenForLegacyPages } from '@/lib/auth';
+import { authRequest, persistTokenForLegacyPages } from '../../lib/auth';
 
 type RegisterResponse = {
   message: string;
