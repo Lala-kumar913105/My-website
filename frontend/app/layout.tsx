@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import './globals.css';
 import SWRConfigProvider from '@/app/components/swr-config';
-import { I18nProvider } from "@/app/i18n/context";
+import { I18nProvider } from "../i18n/context";
 import { Toaster } from "react-hot-toast";
 import ClientShell from "@/app/components/client-shell";
 

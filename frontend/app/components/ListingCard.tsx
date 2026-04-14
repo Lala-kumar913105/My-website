@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { useI18n } from "@/app/i18n/context";
+import { useI18n } from "../i18n/context";
 
 export interface Listing {
   id: number;

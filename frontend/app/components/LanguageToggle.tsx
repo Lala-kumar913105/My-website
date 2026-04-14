@@ -1,7 +1,7 @@
 "use client";
 
 import React from 'react';
-import { useI18n } from '@/app/i18n/context';
+import { useI18n } from '../i18n/context';
 
 const LanguageToggle: React.FC = () => {
   const { language, setLanguage } = useI18n();

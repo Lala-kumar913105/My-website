@@ -3,7 +3,7 @@
 import React from 'react';
 import ListingCard, { Listing } from '@/app/components/ListingCard';
 import { useRouter } from 'next/navigation';
-import { useI18n } from '@/app/i18n/context';
+import { useI18n } from '../i18n/context';
 
 interface WishlistItem {
   id: number;

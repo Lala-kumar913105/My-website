@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useI18n } from "@/app/i18n/context";
+import { useI18n } from "../i18n/context";
 import { GoogleMap, LoadScript, Marker } from '@react-google-maps/api';
 
 interface Product {
