@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import ListingCard from './components/ListingCard';
+import ListingCard, { Listing } from '../components/ListingCard';
 import { useRouter } from 'next/navigation';
 import { useI18n } from '../i18n/context';
 
