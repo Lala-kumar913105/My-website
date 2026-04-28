@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { API_BASE_URL } from "../../lib/auth";
 import { FALLBACK_PRODUCT_IMAGE, resolveProductImageSrc } from "../../lib/image";
@@ -60,7 +60,7 @@ const statusLabel: Record<string, string> = {
 
 const humanize = (value: string) => value.replace(/_/g, " ");
 
-export default function MyOrdersPage() {
+function MyOrdersContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const API = API_BASE_URL;
@@ -315,5 +315,13 @@ export default function MyOrdersPage() {
         </section>
       </div>
     </div>
+  );
+}
+
+export default function MyOrdersPage() {
+  return (
+    <Suspense fallback={<div>Loading orders...</div>}>
+      <MyOrdersContent />
+    </Suspense>
   );
 }

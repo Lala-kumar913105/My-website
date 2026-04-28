@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { API_BASE_URL } from "../../lib/auth";
 import { FALLBACK_PRODUCT_IMAGE, resolveProductImageSrc } from "../../lib/image";
@@ -47,7 +47,7 @@ const badgeStyle: Record<string, string> = {
 
 const canManage = (status: BookingStatus) => ["pending", "confirmed", "rescheduled"].includes(status);
 
-export default function MyBookingsPage() {
+function MyBookingsContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const API = API_BASE_URL;
@@ -377,5 +377,23 @@ export default function MyBookingsPage() {
         </section>
       </div>
     </div>
+  );
+}
+
+export default function MyBookingsPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="app-shell">
+          <div className="app-container space-y-4">
+            <div className="ds-card h-24 animate-pulse bg-slate-200" />
+            <div className="ds-card h-28 animate-pulse bg-slate-200" />
+            <div className="ds-card h-28 animate-pulse bg-slate-200" />
+          </div>
+        </div>
+      }
+    >
+      <MyBookingsContent />
+    </Suspense>
   );
 }
