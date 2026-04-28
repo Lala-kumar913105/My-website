@@ -14,8 +14,8 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.db.session import get_db
-from app import crud, models
 from app.models.user import RoleEnum
+from app.models.user import User
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 security = HTTPBearer()
@@ -29,34 +29,28 @@ PASSWORD_MAX_LENGTH = 72
 
 def _normalize_bcrypt_password(password: str) -> str:
     """
-    Normalize password input before bcrypt operations.
-
-    - Convert incoming password-like value to str
-    - Truncate to bcrypt-compatible 72 characters
+    bcrypt has a hard 72-byte limit.
+    Always trim by bytes before hash/verify.
     """
     if password is None:
-        raise ValueError("Password is required")
+        return ""
 
-    normalized = str(password)
-    if len(normalized) > PASSWORD_MAX_LENGTH:
-        normalized = normalized[:PASSWORD_MAX_LENGTH]
-
-    return normalized
+    password_str = str(password)
+    password_bytes = password_str.encode("utf-8")
+    password_bytes = password_bytes[:72]
+    return password_bytes.decode("utf-8", errors="ignore")
 
 
 def validate_password_length(password: str) -> None:
-    """Validate password strength rules before hashing."""
-    if not password:
+    """Validate password strength only. Do not block bcrypt 72-byte limit here."""
+    if password is None or not str(password).strip():
         raise ValueError("Password is required")
+
+    password = str(password)
 
     if len(password) < PASSWORD_MIN_LENGTH:
         raise ValueError(
             f"Password must be at least {PASSWORD_MIN_LENGTH} characters long"
-        )
-
-    if len(password.encode("utf-8")) > PASSWORD_MAX_LENGTH:
-        raise ValueError(
-            f"Password must be at most {PASSWORD_MAX_LENGTH} bytes long"
         )
 
     if not re.search(r"[a-z]", password):
@@ -73,7 +67,6 @@ def validate_password_length(password: str) -> None:
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """Verify if a plain password matches a hashed password."""
     if not plain_password or not hashed_password:
         return False
 
@@ -81,7 +74,6 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
         normalized_password = _normalize_bcrypt_password(plain_password)
         return pwd_context.verify(normalized_password, hashed_password)
     except Exception:
-        # Prevent malformed/legacy hash values from crashing auth flow
         return False
 
 
@@ -272,7 +264,7 @@ def _normalize_role(role: RoleEnum) -> RoleEnum:
     return role
 
 
-def get_current_active_admin(current_user: models.User = Depends(get_current_user)):
+def get_current_active_admin(current_user: User = Depends(get_current_user)):
     """Get the current active admin user."""
     if _normalize_role(current_user.role) != RoleEnum.ADMIN:
         raise HTTPException(
@@ -282,7 +274,7 @@ def get_current_active_admin(current_user: models.User = Depends(get_current_use
     return current_user
 
 
-def get_current_active_seller(current_user: models.User = Depends(get_current_user)):
+def get_current_active_seller(current_user: User = Depends(get_current_user)):
     """Get the current active seller user."""
     if _normalize_role(current_user.role) not in {RoleEnum.SELLER, RoleEnum.BOTH}:
         raise HTTPException(
@@ -292,7 +284,7 @@ def get_current_active_seller(current_user: models.User = Depends(get_current_us
     return current_user
 
 
-def get_current_active_buyer(current_user: models.User = Depends(get_current_user)):
+def get_current_active_buyer(current_user: User = Depends(get_current_user)):
     """Get the current active buyer user."""
     if _normalize_role(current_user.role) not in {RoleEnum.BUYER, RoleEnum.BOTH}:
         raise HTTPException(
@@ -302,7 +294,7 @@ def get_current_active_buyer(current_user: models.User = Depends(get_current_use
     return current_user
 
 
-def get_current_active_user(current_user: models.User = Depends(get_current_user)):
+def get_current_active_user(current_user: User = Depends(get_current_user)):
     """Backward compatible buyer alias (BUYER/BOTH/USER)."""
     if _normalize_role(current_user.role) not in {RoleEnum.BUYER, RoleEnum.BOTH}:
         raise HTTPException(
@@ -312,7 +304,7 @@ def get_current_active_user(current_user: models.User = Depends(get_current_user
     return current_user
 
 
-def get_current_active_delivery_partner(current_user: models.User = Depends(get_current_user)):
+def get_current_active_delivery_partner(current_user: User = Depends(get_current_user)):
     """Get the current active delivery partner user."""
     if _normalize_role(current_user.role) != RoleEnum.DELIVERY_PARTNER:
         raise HTTPException(
@@ -324,7 +316,7 @@ def get_current_active_delivery_partner(current_user: models.User = Depends(get_
 
 def get_current_user_with_roles(allowed_roles: List[RoleEnum]):
     """Dependency to get current user with specific role(s) allowed."""
-    def dependency(current_user: models.User = Depends(get_current_user)):
+    def dependency(current_user: User = Depends(get_current_user)):
         normalized_role = _normalize_role(current_user.role)
         normalized_allowed = {_normalize_role(role) for role in allowed_roles}
 
