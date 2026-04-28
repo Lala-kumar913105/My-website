@@ -70,7 +70,7 @@ function LoginContent() {
 
       persistTokenForLegacyPages(data.access_token);
       toast.success(data.message || 'Login successful');
-      const redirectTarget = consumePostLoginRedirect('/');
+      const redirectTarget = consumePostLoginRedirect('/profile');
       router.replace(redirectTarget);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Login failed');

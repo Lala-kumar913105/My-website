@@ -37,12 +37,13 @@ function extractErrorMessage(data: any): string {
 }
 
 export async function authRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
+  const useCredentials = options.useCredentials ?? true;
   const response = await fetch(`${API_BASE_URL}${path}`, {
     method: options.method || "GET",
     headers: {
       "Content-Type": "application/json",
     },
-    credentials: options.useCredentials ? "include" : "omit",
+    credentials: useCredentials ? "include" : "omit",
     body: options.body ? JSON.stringify(options.body) : undefined,
   });
 

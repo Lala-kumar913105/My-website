@@ -112,7 +112,7 @@ export default function SellerDashboardPage() {
 
   const authHeaders = useCallback(
     (json = false): HeadersInit => ({
-      Authorization: `Bearer ${token}`,
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(json ? { "Content-Type": "application/json" } : {}),
     }),
     [token],
@@ -124,10 +124,10 @@ export default function SellerDashboardPage() {
     setGlobalError(null);
 
     const [listingsRes, ordersRes, bookingsRes, analyticsRes] = await Promise.allSettled([
-      fetch(`${API_BASE_URL}/api/v1/listings/seller?limit=200`, { headers: authHeaders() }),
-      fetch(`${API_BASE_URL}/api/v1/seller/orders?page=1&page_size=6`, { headers: authHeaders() }),
-      fetch(`${API_BASE_URL}/api/v1/bookings/seller/me?limit=6`, { headers: authHeaders() }),
-      fetch(`${API_BASE_URL}/api/v1/seller/analytics`, { headers: authHeaders() }),
+      fetch(`${API_BASE_URL}/api/v1/listings/seller?limit=200`, { headers: authHeaders(), credentials: "include" }),
+      fetch(`${API_BASE_URL}/api/v1/seller/orders?page=1&page_size=6`, { headers: authHeaders(), credentials: "include" }),
+      fetch(`${API_BASE_URL}/api/v1/bookings/seller/me?limit=6`, { headers: authHeaders(), credentials: "include" }),
+      fetch(`${API_BASE_URL}/api/v1/seller/analytics`, { headers: authHeaders(), credentials: "include" }),
     ]);
 
     let hasAnySuccess = false;
@@ -166,16 +166,12 @@ export default function SellerDashboardPage() {
   useEffect(() => {
     const init = async () => {
       const storedToken = localStorage.getItem("token") || "";
-      if (!storedToken) {
-        router.replace("/login");
-        return;
-      }
-
       setToken(storedToken);
 
       try {
         const profileRes = await fetch(`${API_BASE_URL}/api/v1/users/me`, {
-          headers: { Authorization: `Bearer ${storedToken}` },
+          headers: storedToken ? { Authorization: `Bearer ${storedToken}` } : undefined,
+          credentials: "include",
         });
 
         if (profileRes.status === 401) {
@@ -190,7 +186,8 @@ export default function SellerDashboardPage() {
         }
 
         const sellerRes = await fetch(`${API_BASE_URL}/api/v1/sellers/me`, {
-          headers: { Authorization: `Bearer ${storedToken}` },
+          headers: storedToken ? { Authorization: `Bearer ${storedToken}` } : undefined,
+          credentials: "include",
         });
 
         if (sellerRes.ok) {
@@ -246,6 +243,7 @@ export default function SellerDashboardPage() {
       const res = await fetch(`${API_BASE_URL}/api/v1/listings/${listingId}`, {
         method: "DELETE",
         headers: authHeaders(),
+        credentials: "include",
       });
       if (!res.ok) throw new Error();
       setListings((prev) => prev.filter((item) => item.id !== listingId));
@@ -263,6 +261,7 @@ export default function SellerDashboardPage() {
       const res = await fetch(`${API_BASE_URL}/api/v1/seller/order-action`, {
         method: "POST",
         headers: authHeaders(true),
+        credentials: "include",
         body: JSON.stringify({ order_id: orderId, action }),
       });
       if (!res.ok) throw new Error();
@@ -282,6 +281,7 @@ export default function SellerDashboardPage() {
       const res = await fetch(`${API_BASE_URL}/api/v1/bookings/${bookingId}/status`, {
         method: "POST",
         headers: authHeaders(true),
+        credentials: "include",
         body: JSON.stringify({ status }),
       });
       if (!res.ok) throw new Error();

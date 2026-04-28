@@ -53,13 +53,10 @@ export default function CartPage() {
 
     try {
       const token = localStorage.getItem("token");
-      if (!token) {
-        router.push("/login?next=%2Fcart");
-        return;
-      }
 
       const profileResponse = await fetch(`${API}/api/v1/users/me`, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        credentials: "include",
       });
       if (!profileResponse.ok) {
         if (profileResponse.status === 401) {
@@ -73,7 +70,8 @@ export default function CartPage() {
       setUserId(profile.id);
 
       const cartResponse = await fetch(`${API}/api/v1/carts/${profile.id}`, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        credentials: "include",
       });
       if (!cartResponse.ok) {
         if (cartResponse.status === 401) {
@@ -121,8 +119,9 @@ export default function CartPage() {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
+        credentials: "include",
         body: JSON.stringify({ quantity: nextQuantity }),
       });
 
@@ -167,8 +166,9 @@ export default function CartPage() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
+        credentials: "include",
         body: JSON.stringify({ user_id: userId, item_id: item.id }),
       });
 

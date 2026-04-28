@@ -86,6 +86,7 @@ function MyOrdersContent() {
 
         const meResponse = await fetch(`${API}/api/v1/users/me`, {
           headers: { Authorization: `Bearer ${token}` },
+          credentials: "include",
         });
         if (!meResponse.ok) {
           localStorage.removeItem("token");
@@ -98,6 +99,7 @@ function MyOrdersContent() {
 
         const ordersResponse = await fetch(`${API}/api/v1/orders/user/${me.id}`, {
           headers: { Authorization: `Bearer ${token}` },
+          credentials: "include",
         });
         if (!ordersResponse.ok) {
           if (ordersResponse.status === 401) {
@@ -137,6 +139,7 @@ function MyOrdersContent() {
             "Content-Type": "application/json",
             Authorization: `Bearer ${token}`,
           },
+          credentials: "include",
           body: JSON.stringify({
             user_id: userId,
             product_id: item.product_id,

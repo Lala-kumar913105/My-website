@@ -132,6 +132,7 @@ export default function ProfilePage() {
         headers: {
           Authorization: `Bearer ${token}`,
         },
+        credentials: 'include',
       })
 
       if (response.ok) {
@@ -172,6 +173,7 @@ export default function ProfilePage() {
         headers: {
           Authorization: `Bearer ${token}`,
         },
+        credentials: 'include',
       })
 
       if (response.status === 401) {
@@ -282,6 +284,7 @@ export default function ProfilePage() {
               headers: {
                 Authorization: `Bearer ${latestToken}`,
               },
+              credentials: 'include',
             })
 
             if (!isMounted) return
