@@ -27,6 +27,9 @@ def create_service(db: Session, service: schemas.ServiceCreate, seller_id: int):
         description=service.description,
         price=service.price,
         duration_minutes=service.duration_minutes,
+        latitude=service.latitude,
+        longitude=service.longitude,
+        address=service.address,
     )
     db.add(db_service)
     db.commit()

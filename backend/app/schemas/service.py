@@ -1,14 +1,17 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional, List
 from datetime import datetime
 
 
 class ServiceBase(BaseModel):
-    name: str
-    description: Optional[str] = None
-    price: float
-    duration_minutes: int
+    name: str = Field(..., min_length=2, max_length=120)
+    description: Optional[str] = Field(default=None, max_length=2000)
+    price: float = Field(..., ge=0)
+    duration_minutes: int = Field(..., ge=1, le=1440)
     category_id: Optional[int] = None
+    latitude: Optional[float] = Field(default=None, ge=-90, le=90)
+    longitude: Optional[float] = Field(default=None, ge=-180, le=180)
+    address: Optional[str] = Field(default=None, max_length=300)
     is_active: Optional[bool] = True
 
 
@@ -17,10 +20,13 @@ class ServiceCreate(ServiceBase):
 
 
 class ServiceUpdate(BaseModel):
-    name: Optional[str] = None
-    description: Optional[str] = None
-    price: Optional[float] = None
-    duration_minutes: Optional[int] = None
+    name: Optional[str] = Field(default=None, min_length=2, max_length=120)
+    description: Optional[str] = Field(default=None, max_length=2000)
+    price: Optional[float] = Field(default=None, ge=0)
+    duration_minutes: Optional[int] = Field(default=None, ge=1, le=1440)
+    latitude: Optional[float] = Field(default=None, ge=-90, le=90)
+    longitude: Optional[float] = Field(default=None, ge=-180, le=180)
+    address: Optional[str] = Field(default=None, max_length=300)
     is_active: Optional[bool] = None
 
 

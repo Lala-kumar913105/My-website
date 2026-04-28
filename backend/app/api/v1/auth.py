@@ -37,6 +37,7 @@ from app.schemas.auth import (
     OTPVerification,
     PhoneNumber,
     RefreshRequest,
+    ResetPasswordTokenValidationResponse,
     ResetPasswordRequest,
     Token,
 )
@@ -195,14 +196,30 @@ def forgot_password(payload: ForgotPasswordRequest, db: Session = Depends(get_db
     db.commit()
 
     reset_url = f"{settings.FRONTEND_URL.rstrip('/')}/reset-password?token={raw_token}"
+    if not settings.is_production:
+        print(f"[auth] Password reset link generated for {normalized_email}: {reset_url}")
+    return ForgotPasswordResponse(message=generic_message)
 
-    if settings.is_production:
-        return ForgotPasswordResponse(message=generic_message)
 
-    return ForgotPasswordResponse(
-        message=generic_message,
-        reset_token=raw_token,
-        reset_url=reset_url,
+@router.get("/reset-password/validate", response_model=ResetPasswordTokenValidationResponse)
+def validate_reset_password_token(token: str, db: Session = Depends(get_db)):
+    token_hash = hash_reset_token(token)
+    user = db.query(User).filter(User.reset_password_token_hash == token_hash).first()
+    if not user:
+        return ResetPasswordTokenValidationResponse(
+            valid=False,
+            message="This reset link is invalid or has already been used.",
+        )
+
+    if not user.reset_password_expires_at or user.reset_password_expires_at < datetime.utcnow():
+        return ResetPasswordTokenValidationResponse(
+            valid=False,
+            message="This reset link has expired. Please request a new one.",
+        )
+
+    return ResetPasswordTokenValidationResponse(
+        valid=True,
+        message="Reset link is valid.",
     )
 
 

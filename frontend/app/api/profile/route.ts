@@ -52,7 +52,10 @@ const fetchAccessToken = async (baseUrl: string, phoneNumber: string, otp: strin
   }
 }
 
-export async function GET(request: Request) {
+const resolveRequestToken = async (
+  request: Request,
+  scope: 'profile:get' | 'profile:put'
+) => {
   const authHeader = request.headers.get('authorization')?.trim() || ''
   const headerToken = authHeader.replace(/^Bearer\s+/i, '').trim()
   const explicitToken = request.headers.get('x-access-token')?.trim()
@@ -61,7 +64,7 @@ export async function GET(request: Request) {
   const phoneNumber = request.headers.get('x-phone-number')?.trim()
   const otp = request.headers.get('x-otp')?.trim()
 
-  const baseUrl = resolveApiBaseUrl('profile:get')
+  const baseUrl = resolveApiBaseUrl(scope)
 
   if (!token && phoneNumber && otp) {
     const freshToken = await fetchAccessToken(baseUrl, phoneNumber, otp)
@@ -70,11 +73,22 @@ export async function GET(request: Request) {
     }
   }
 
+  return {
+    token,
+    baseUrl,
+    forwardedAuthHeader: authHeader || (token ? `Bearer ${token}` : ''),
+  }
+}
+
+export async function GET(request: Request) {
+  const { token, baseUrl, forwardedAuthHeader } = await resolveRequestToken(
+    request,
+    'profile:get'
+  )
+
   if (!token) {
     return NextResponse.json({ detail: 'Unauthorized' }, { status: 401 })
   }
-
-  const forwardedAuthHeader = authHeader || `Bearer ${token}`
 
   try {
     const controller = new AbortController()
@@ -144,28 +158,14 @@ export async function GET(request: Request) {
 }
 
 export async function PUT(request: Request) {
-  const authHeader = request.headers.get('authorization')?.trim() || ''
-  const headerToken = authHeader.replace(/^Bearer\s+/i, '').trim()
-  const explicitToken = request.headers.get('x-access-token')?.trim()
-  let token = headerToken || explicitToken || ''
-
-  const phoneNumber = request.headers.get('x-phone-number')?.trim()
-  const otp = request.headers.get('x-otp')?.trim()
-
-  const baseUrl = resolveApiBaseUrl('profile:put')
-
-  if (!token && phoneNumber && otp) {
-    const freshToken = await fetchAccessToken(baseUrl, phoneNumber, otp)
-    if (freshToken) {
-      token = freshToken
-    }
-  }
+  const { token, baseUrl, forwardedAuthHeader } = await resolveRequestToken(
+    request,
+    'profile:put'
+  )
 
   if (!token) {
     return NextResponse.json({ detail: 'Unauthorized' }, { status: 401 })
   }
-
-  const forwardedAuthHeader = authHeader || `Bearer ${token}`
   const body = await request.json().catch(() => null)
 
   if (!body) {
@@ -196,6 +196,68 @@ export async function PUT(request: Request) {
 
     if (!response.ok) {
       const detail = payload?.detail || payload?.message || 'Request failed'
+      return NextResponse.json({ detail }, { status: response.status })
+    }
+
+    return NextResponse.json(payload ?? {})
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      return NextResponse.json(
+        { detail: 'Backend request timed out' },
+        { status: 504 }
+      )
+    }
+
+    return NextResponse.json(
+      { detail: 'Backend unavailable. Please try again shortly.' },
+      { status: 503 }
+    )
+  }
+}
+
+export async function POST(request: Request) {
+  const { token, baseUrl, forwardedAuthHeader } = await resolveRequestToken(
+    request,
+    'profile:put'
+  )
+
+  if (!token) {
+    return NextResponse.json({ detail: 'Unauthorized' }, { status: 401 })
+  }
+
+  const formData = await request.formData().catch(() => null)
+  const file = formData?.get('file')
+
+  if (!(file instanceof File)) {
+    return NextResponse.json({ detail: 'Invalid file payload' }, { status: 400 })
+  }
+
+  try {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS * 4)
+
+    const upstreamFormData = new FormData()
+    upstreamFormData.append('file', file)
+
+    const response = await fetch(`${baseUrl}/api/v1/profile/avatar`, {
+      method: 'POST',
+      headers: {
+        Authorization: forwardedAuthHeader,
+      },
+      body: upstreamFormData,
+      signal: controller.signal,
+    })
+
+    clearTimeout(timeout)
+
+    const payload = await parseJsonResponse(response).catch(() => null)
+
+    if (response.status === 401) {
+      return NextResponse.json({ detail: 'Token expired' }, { status: 401 })
+    }
+
+    if (!response.ok) {
+      const detail = payload?.detail || payload?.message || 'Upload failed'
       return NextResponse.json({ detail }, { status: response.status })
     }
 

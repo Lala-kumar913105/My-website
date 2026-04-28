@@ -14,6 +14,9 @@ class Listing(Base):
     type = Column(String, nullable=False, index=True)  # "product" | "service"
     stock = Column(Integer, nullable=True)
     duration_minutes = Column(Integer, nullable=True)
+    latitude = Column(Float, nullable=True)
+    longitude = Column(Float, nullable=True)
+    address = Column(String, nullable=True)
     source_id = Column(Integer, nullable=True)
     source_type = Column(String, nullable=True)  # "product" | "service"
 

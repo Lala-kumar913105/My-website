@@ -9,12 +9,15 @@ class ListingBase(BaseModel):
     type: str = Field(..., pattern=r"^(product|service)$")
     stock: Optional[int] = Field(default=None, ge=0)
     duration_minutes: Optional[int] = Field(default=None, ge=1, le=1440)
+    latitude: Optional[float] = Field(default=None, ge=-90, le=90)
+    longitude: Optional[float] = Field(default=None, ge=-180, le=180)
+    address: Optional[str] = Field(default=None, max_length=300)
     source_id: Optional[int] = None
     source_type: Optional[str] = Field(default=None, pattern=r"^(product|service)$")
 
 
 class ListingCreate(ListingBase):
-    seller_id: int
+    pass
 
 
 class ListingUpdate(BaseModel):
@@ -24,6 +27,9 @@ class ListingUpdate(BaseModel):
     type: Optional[str] = Field(default=None, pattern=r"^(product|service)$")
     stock: Optional[int] = Field(default=None, ge=0)
     duration_minutes: Optional[int] = Field(default=None, ge=1, le=1440)
+    latitude: Optional[float] = Field(default=None, ge=-90, le=90)
+    longitude: Optional[float] = Field(default=None, ge=-180, le=180)
+    address: Optional[str] = Field(default=None, max_length=300)
     source_id: Optional[int] = None
     source_type: Optional[str] = Field(default=None, pattern=r"^(product|service)$")
 
@@ -31,6 +37,10 @@ class ListingUpdate(BaseModel):
 class Listing(ListingBase):
     id: int
     seller_id: int
+    category_id: Optional[int] = None
+    image_url: Optional[str] = None
+    seller_business_name: Optional[str] = None
+    seller_rating: Optional[float] = None
 
     class Config:
         from_attributes = True

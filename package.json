@@ -1,28 +1,16 @@
 {
-  "name": "my-ecommerce-store",
+  "name": "my-website-root",
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start"
+    "dev": "npm --prefix frontend run dev --",
+    "dev:frontend": "npm --prefix frontend run dev --",
+    "dev:stop": "npm --prefix frontend run dev:stop",
+    "dev:restart": "npm --prefix frontend run dev:restart --",
+    "build": "npm --prefix frontend run build",
+    "start": "npm --prefix frontend run start",
+    "dev:root": "node -e \"console.error('Root Next.js runtime is disabled. Use frontend as source-of-truth: npm --prefix frontend run dev'); process.exit(1)\""
   },
-  "dependencies": {
-    "@react-google-maps/api": "^2.20.8",
-    "firebase": "^12.12.0",
-    "lucide-react": "^0.378.0",
-    "next": "14.2.3",
-    "react": "^18",
-    "react-dom": "^18",
-    "react-hot-toast": "^2.6.0",
-    "swr": "^2.4.1"
-  },
-  "devDependencies": {
-    "@types/node": "25.2.0",
-    "@types/react": "19.2.10",
-    "autoprefixer": "^10.5.0",
-    "postcss": "^8.5.10",
-    "tailwindcss": "^4.2.2",
-    "typescript": "5.9.3"
-  }
+  "dependencies": {},
+  "devDependencies": {}
 }

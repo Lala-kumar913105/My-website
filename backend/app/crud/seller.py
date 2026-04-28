@@ -1,5 +1,6 @@
 from sqlalchemy.orm import Session
 from app.models.seller import Seller
+from app.models.user import RoleEnum, User
 from app.schemas.seller import SellerCreate, SellerUpdate
 
 def get_seller(db: Session, seller_id: int):
@@ -14,6 +15,36 @@ def get_sellers(db: Session, skip: int = 0, limit: int = 100):
 def create_seller(db: Session, seller: SellerCreate):
     db_seller = Seller(**seller.dict())
     db.add(db_seller)
+    db.commit()
+    db.refresh(db_seller)
+    return db_seller
+
+
+def get_or_create_seller(db: Session, user: User):
+    existing = get_seller_by_user_id(db, user_id=user.id)
+    if existing:
+        return existing
+
+    identity = (
+        user.first_name
+        or user.username
+        or user.email
+        or user.phone_number
+        or f"User {user.id}"
+    )
+    business_name = f"{identity} Store"[:150]
+
+    db_seller = Seller(
+        user_id=user.id,
+        business_name=business_name,
+        business_address=user.location,
+        business_description=None,
+    )
+    db.add(db_seller)
+
+    if user.role == RoleEnum.BUYER or user.role == RoleEnum.USER:
+        user.role = RoleEnum.BOTH
+
     db.commit()
     db.refresh(db_seller)
     return db_seller

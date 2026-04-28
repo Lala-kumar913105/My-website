@@ -8,12 +8,18 @@ from sqlalchemy import func
 router = APIRouter()
 
 @router.get("/me", response_model=schemas.Seller)
-def get_current_seller(current_user: models.User = Depends(get_current_active_seller), db: Session = Depends(get_db)):
-    """Get the current seller (requires seller role)"""
+def get_current_seller(current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Get the current seller profile for authenticated user."""
     seller = crud.get_seller_by_user_id(db, user_id=current_user.id)
     if not seller:
         raise HTTPException(status_code=404, detail="Seller not found for this user")
     return seller
+
+
+@router.post("/become-seller", response_model=schemas.Seller)
+def become_seller(current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Create seller profile for current user if not already present."""
+    return crud.get_or_create_seller(db, user=current_user)
 
 @router.put("/me", response_model=schemas.Seller)
 def update_current_seller(seller: schemas.SellerUpdate, current_user: models.User = Depends(get_current_active_seller), db: Session = Depends(get_db)):

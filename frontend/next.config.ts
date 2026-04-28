@@ -1,6 +1,15 @@
 import type { NextConfig } from "next";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const configFilePath = fileURLToPath(import.meta.url);
+const frontendRoot = path.dirname(configFilePath);
 
 const nextConfig: NextConfig = {
+  outputFileTracingRoot: frontendRoot,
+  turbopack: {
+    root: frontendRoot,
+  },
   reactStrictMode: true,
   compress: true,
   poweredByHeader: false,

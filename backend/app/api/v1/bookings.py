@@ -97,11 +97,24 @@ def read_bookings_by_service(service_id: int, skip: int = 0, limit: int = 100, c
 def create_booking(booking: schemas.BookingCreate, current_user: models.User = Depends(get_current_active_user), db: Session = Depends(get_db)):
     """Create a new booking (requires user role)"""
     try:
+        if booking.service_id is None and booking.listing_id is None:
+            raise ValueError("service_id or listing_id is required")
+
+        resolved_service_id = booking.service_id
+        if resolved_service_id is None and booking.listing_id is not None:
+            listing = crud.get_listing(db, listing_id=booking.listing_id)
+            if not listing or listing.type != "service":
+                raise ValueError("Selected listing is not a service")
+            resolved_service_id = listing.source_id
+
+        if resolved_service_id is None:
+            raise ValueError("Service mapping not found for listing")
+
         # Prevent double booking
         existing = (
             db.query(models.Booking)
             .filter(
-                models.Booking.service_id == booking.service_id,
+                models.Booking.service_id == resolved_service_id,
                 models.Booking.booking_time == booking.booking_time,
                 models.Booking.status.in_([models.BookingStatus.pending, models.BookingStatus.confirmed, models.BookingStatus.rescheduled]),
             )
@@ -281,6 +294,34 @@ def update_slot(
             raise HTTPException(status_code=403, detail="Not authorized")
 
     return crud.booking.update_booking_slot(db, slot_id=slot_id, slot=slot)
+
+
+@router.delete("/slots/{slot_id}")
+def delete_slot(
+    slot_id: int,
+    current_user: models.User = Depends(get_current_active_seller),
+    db: Session = Depends(get_db),
+):
+    """Delete a booking slot (seller only)."""
+    db_slot = db.query(models.BookingSlot).filter(models.BookingSlot.id == slot_id).first()
+    if not db_slot:
+        raise HTTPException(status_code=404, detail="Slot not found")
+
+    seller = crud.get_seller_by_user_id(db, current_user.id)
+    if not seller:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    if db_slot.listing_id:
+        listing = crud.get_listing(db, listing_id=db_slot.listing_id)
+        if not listing or listing.seller_id != seller.id or listing.type != "service":
+            raise HTTPException(status_code=403, detail="Not authorized")
+    else:
+        service = crud.get_service(db, service_id=db_slot.service_id)
+        if not service or service.seller_id != seller.id:
+            raise HTTPException(status_code=403, detail="Not authorized")
+
+    crud.booking.delete_booking_slot(db, slot_id=slot_id)
+    return {"message": "Slot deleted"}
 
 
 @router.delete("/{booking_id}", response_model=schemas.Booking)

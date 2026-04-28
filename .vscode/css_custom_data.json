@@ -1,0 +1,31 @@
+{
+  "version": 1.1,
+  "atDirectives": [
+    {
+      "name": "@theme",
+      "description": "Tailwind CSS v4 theme directive.",
+      "references": [
+        {
+          "name": "Tailwind CSS v4 Theme Variables",
+          "url": "https://tailwindcss.com/docs/theme"
+        }
+      ]
+    },
+    {
+      "name": "@utility",
+      "description": "Tailwind CSS v4 custom utility directive."
+    },
+    {
+      "name": "@variant",
+      "description": "Tailwind CSS v4 variant directive."
+    },
+    {
+      "name": "@custom-variant",
+      "description": "Tailwind CSS v4 custom variant directive."
+    },
+    {
+      "name": "@source",
+      "description": "Tailwind CSS v4 source detection directive."
+    }
+  ]
+}

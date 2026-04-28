@@ -46,11 +46,9 @@ def read_services_by_category(
 
 
 @router.post("/", response_model=schemas.Service)
-def create_service(service: schemas.ServiceCreate, current_user: models.User = Depends(get_current_active_seller), db: Session = Depends(get_db)):
-    """Create a new service (requires seller role)"""
-    seller = crud.get_seller_by_user_id(db, user_id=current_user.id)
-    if not seller:
-        raise HTTPException(status_code=404, detail="Seller not found for this user")
+def create_service(service: schemas.ServiceCreate, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Create a new service (auto-creates seller profile if needed)."""
+    seller = crud.get_or_create_seller(db, user=current_user)
     
     db_service = crud.create_service(db, service=service, seller_id=seller.id)
     return db_service

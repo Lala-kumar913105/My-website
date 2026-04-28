@@ -7,15 +7,12 @@ import { authRequest } from '../../lib/auth';
 
 type ForgotResponse = {
   message: string;
-  reset_token?: string;
-  reset_url?: string;
 };
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
-  const [devToken, setDevToken] = useState<string | null>(null);
-  const [devUrl, setDevUrl] = useState<string | null>(null);
+  const [isSubmitted, setIsSubmitted] = useState(false);
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -24,12 +21,11 @@ export default function ForgotPasswordPage() {
     try {
       const data = await authRequest<ForgotResponse>('/api/v1/auth/forgot-password', {
         method: 'POST',
-        body: { email },
+        body: { email: email.trim().toLowerCase() },
       });
 
-      setDevToken(data.reset_token || null);
-      setDevUrl(data.reset_url || null);
-      toast.success(data.message || 'Reset instructions generated');
+      setIsSubmitted(true);
+      toast.success(data.message || 'If an account exists, reset instructions have been sent.');
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to process request');
     } finally {
@@ -38,48 +34,39 @@ export default function ForgotPasswordPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-gray-50">
-      <div className="bg-white w-full max-w-md rounded-2xl shadow p-6 space-y-4">
-        <h1 className="text-2xl font-bold">Forgot Password</h1>
-        <p className="text-sm text-gray-600">Enter your email to generate a reset link.</p>
-
-        <form onSubmit={onSubmit} className="space-y-4">
-          <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="you@example.com"
-            className="w-full border rounded-lg px-4 py-3"
-            required
-          />
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-purple-600 text-white rounded-lg py-3 disabled:opacity-70"
-          >
-            {loading ? 'Submitting...' : 'Send reset link'}
-          </button>
-        </form>
-
-        {(devToken || devUrl) && (
-          <div className="text-xs bg-amber-50 border border-amber-200 rounded p-3 space-y-2">
-            <p className="font-semibold text-amber-700">Development reset data</p>
-            {devUrl && (
-              <p className="break-all">
-                URL: <a className="text-purple-700 underline" href={devUrl}>{devUrl}</a>
-              </p>
-            )}
-            {devToken && <p className="break-all">Token: {devToken}</p>}
+    <div className="app-shell">
+      <main className="app-container flex min-h-screen items-center justify-center">
+        <section className="ds-card w-full max-w-md space-y-5 p-6 sm:p-7">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Account recovery</p>
+            <h1 className="mt-2 text-2xl font-semibold text-slate-900">Forgot password?</h1>
+            <p className="mt-1 text-sm text-slate-600">Enter your email and we will send reset instructions if your account exists.</p>
           </div>
-        )}
 
-        <p className="text-sm text-gray-600">
-          Back to{' '}
-          <Link href="/login" className="text-purple-600 font-medium">
-            login
-          </Link>
-        </p>
-      </div>
+          <form onSubmit={onSubmit} className="space-y-4">
+            <div>
+              <label className="ds-label" htmlFor="email">Email</label>
+              <input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" className="ds-input" required autoComplete="email" />
+            </div>
+            <button type="submit" disabled={loading} className="ds-btn-primary w-full disabled:opacity-70">
+              {loading ? 'Sending...' : 'Send Reset Link'}
+            </button>
+          </form>
+
+          {isSubmitted && (
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+              If an account exists for this email, a reset link has been sent.
+            </div>
+          )}
+
+          <p className="text-sm text-slate-600">
+            Back to{' '}
+            <Link href="/login" className="font-semibold text-slate-900 underline underline-offset-4">
+              login
+            </Link>
+          </p>
+        </section>
+      </main>
     </div>
   );
 }

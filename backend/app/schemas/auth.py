@@ -70,8 +70,11 @@ class ForgotPasswordRequest(BaseModel):
 
 class ForgotPasswordResponse(BaseModel):
     message: str
-    reset_token: Optional[str] = None
-    reset_url: Optional[str] = None
+
+
+class ResetPasswordTokenValidationResponse(BaseModel):
+    valid: bool
+    message: str
 
 
 class ResetPasswordRequest(BaseModel):

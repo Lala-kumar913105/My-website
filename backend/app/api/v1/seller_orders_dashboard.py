@@ -37,7 +37,8 @@ def get_seller_orders(
             .join(models.OrderItem.product)
             .filter(
                 (models.Product.name.ilike(f"%{search}%"))
-                | (models.User.name.ilike(f"%{search}%"))
+                | (models.User.email.ilike(f"%{search}%"))
+                | (models.User.phone_number.ilike(f"%{search}%"))
             )
         )
 
@@ -52,6 +53,12 @@ def get_seller_orders(
 
     for order in orders:
         customer = order.user
+        buyer_name = None
+        if customer:
+            full_name = " ".join(
+                part for part in [customer.first_name, customer.last_name] if part
+            ).strip()
+            buyer_name = full_name or customer.email or customer.phone_number
         items = []
         for item in order.order_items:
             product = item.product
@@ -80,7 +87,7 @@ def get_seller_orders(
                 "payment_status": order.payment_status.value if hasattr(order.payment_status, "value") else order.payment_status,
                 "buyer": {
                     "id": customer.id if customer else None,
-                    "name": customer.name if customer else None,
+                    "name": buyer_name,
                     "phone_number": customer.phone_number if customer else None,
                 },
                 "created_at": order.created_at,

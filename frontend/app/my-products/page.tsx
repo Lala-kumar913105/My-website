@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { FALLBACK_PRODUCT_IMAGE, resolveProductImageSrc } from '../../lib/image';
 
 const MyProducts = () => {
   const router = useRouter();
@@ -81,9 +82,12 @@ const MyProducts = () => {
           {products.map((product) => (
             <div key={product.id} className="bg-white rounded-lg shadow-md p-4">
               <img 
-                src={product.image_url ? `${API}${product.image_url}` : '/default-product.png'} 
+                src={resolveProductImageSrc(product.image_url, API)} 
                 alt={product.name} 
                 className="w-full h-48 object-cover rounded mb-4"
+                onError={(event) => {
+                  event.currentTarget.src = FALLBACK_PRODUCT_IMAGE;
+                }}
               />
               <h3 className="text-lg font-semibold mb-2">{product.title ?? product.name}</h3>
               <p className="text-gray-500 mb-2">{product.description}</p>

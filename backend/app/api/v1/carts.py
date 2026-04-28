@@ -95,6 +95,38 @@ def remove_cart_item(
     return crud.delete_cart_item(db, cart_item_id=payload.item_id)
 
 
+@router.put("/items/{item_id}", response_model=schemas.CartItem)
+def update_cart_item_quantity(
+    item_id: int,
+    payload: schemas.CartItemUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_active_user),
+):
+    """Update quantity for a cart item (requires user role)."""
+    if payload.quantity is None:
+        raise HTTPException(status_code=400, detail="Quantity is required")
+
+    if payload.quantity < 1:
+        raise HTTPException(status_code=400, detail="Quantity must be at least 1")
+
+    db_item = crud.get_cart_item(db, cart_item_id=item_id)
+    if not db_item:
+        raise HTTPException(status_code=404, detail="Cart item not found")
+
+    if not db_item.cart or db_item.cart.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized to update this cart item")
+
+    updated_item = crud.update_cart_item(
+        db,
+        cart_item_id=item_id,
+        cart_item=schemas.CartItemUpdate(quantity=payload.quantity),
+    )
+    if not updated_item:
+        raise HTTPException(status_code=500, detail="Unable to update cart item")
+
+    return updated_item
+
+
 @router.delete("/{user_id}")
 def clear_cart(user_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_active_user)):
     """Clear the user's cart (requires user role)."""

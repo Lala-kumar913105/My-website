@@ -20,14 +20,25 @@ def get_bookings_by_service(db: Session, service_id: int, skip: int = 0, limit: 
 
 
 def create_booking(db: Session, booking: schemas.BookingCreate, user_id: int):
+    service_id = booking.service_id
+
+    if service_id is None and booking.listing_id is not None:
+        listing = db.query(models.Listing).filter(models.Listing.id == booking.listing_id).first()
+        if not listing or listing.type != "service":
+            raise ValueError("Service listing not found")
+        service_id = listing.source_id
+
+    if service_id is None:
+        raise ValueError("service_id or listing_id is required")
+
     # Get service to calculate total amount
-    service = db.query(models.Service).filter(models.Service.id == booking.service_id).first()
+    service = db.query(models.Service).filter(models.Service.id == service_id).first()
     if not service:
         raise ValueError("Service not found")
 
     db_booking = models.Booking(
         user_id=user_id,
-        service_id=booking.service_id,
+        service_id=service_id,
         booking_time=booking.booking_time,
         total_amount=service.price,
         status=models.BookingStatus.pending,
@@ -85,12 +96,17 @@ def get_available_slots(
     end_time: datetime,
     listing_id: int | None = None,
 ):
+    query = db.query(models.BookingSlot)
+
+    if service_id is not None:
+        query = query.filter(models.BookingSlot.service_id == service_id)
+    elif listing_id is not None:
+        query = query.filter(models.BookingSlot.listing_id == listing_id)
+    else:
+        return []
+
     return (
-        db.query(models.BookingSlot)
-        .filter(
-            (models.BookingSlot.service_id == service_id)
-            if service_id is not None
-            else (models.BookingSlot.listing_id == listing_id),
+        query.filter(
             models.BookingSlot.start_time >= start_time,
             models.BookingSlot.end_time <= end_time,
             models.BookingSlot.is_available == True,
@@ -124,6 +140,14 @@ def update_booking_slot(db: Session, slot_id: int, slot: schemas.BookingSlotUpda
         db_slot.updated_at = datetime.utcnow()
         db.commit()
         db.refresh(db_slot)
+    return db_slot
+
+
+def delete_booking_slot(db: Session, slot_id: int):
+    db_slot = db.query(models.BookingSlot).filter(models.BookingSlot.id == slot_id).first()
+    if db_slot:
+        db.delete(db_slot)
+        db.commit()
     return db_slot
 
 

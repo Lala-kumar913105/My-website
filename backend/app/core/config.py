@@ -24,6 +24,19 @@ class Settings(BaseSettings):
     RATE_LIMIT_MAX_REQUESTS: int = 120
     RATE_LIMIT_AUTH_MAX_REQUESTS: int = 20
 
+    # OpenRouter / LLM
+    OPENROUTER_API_KEY: str = ""
+    OPENROUTER_MODEL: str = "deepseek/deepseek-v3.2-exp"
+    OPENROUTER_URL: str = "https://openrouter.ai/api/v1/chat/completions"
+    OPENROUTER_HTTP_REFERER: str = "http://localhost:3000"
+    OPENROUTER_APP_TITLE: str = "Zivolf AI Assistant"
+    OPENROUTER_TIMEOUT_SECONDS: int = 30
+
+    # Cloudinary (avatar/profile uploads)
+    CLOUDINARY_CLOUD_NAME: str = ""
+    CLOUDINARY_API_KEY: str = ""
+    CLOUDINARY_API_SECRET: str = ""
+
     model_config = SettingsConfigDict(
         env_file=".env",
         case_sensitive=True,
@@ -37,6 +50,7 @@ class Settings(BaseSettings):
             "https://www.zivolf.com",
             "https://zivolf.com",
             "http://localhost:3000",
+            "http://127.0.0.1:3000",
         ]
 
         if not self.CORS_ORIGINS.strip():

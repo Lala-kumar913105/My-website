@@ -1,664 +1,558 @@
-'use client';
+"use client";
 
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useCallback, useEffect, useMemo, useState } from "react";
+import Image from "next/image";
+import { useRouter } from "next/navigation";
+import { API_BASE_URL } from "../../lib/auth";
+import { FALLBACK_PRODUCT_IMAGE, resolveProductImageSrc } from "../../lib/image";
 
-const SellerDashboard = () => {
+type SellerProfile = {
+  id: number;
+  business_name?: string | null;
+  business_address?: string | null;
+  approved?: boolean;
+  rating?: number | null;
+};
+
+type ListingItem = {
+  id: number;
+  title: string;
+  description?: string | null;
+  price: number;
+  type: "product" | "service" | string;
+  stock?: number | null;
+  duration_minutes?: number | null;
+  image_url?: string | null;
+  source_type?: "product" | "service" | string | null;
+};
+
+type SellerOrder = {
+  order_id: number;
+  total_amount: number;
+  final_amount?: number | null;
+  status: string;
+  payment_status?: string;
+  created_at?: string;
+  buyer?: {
+    id?: number | null;
+    name?: string | null;
+    phone_number?: string | null;
+  };
+  items?: Array<{
+    id: number;
+    name: string;
+    quantity: number;
+    price: number;
+  }>;
+};
+
+type SellerBooking = {
+  id: number;
+  service_id: number;
+  listing_id?: number | null;
+  booking_time: string;
+  status: string;
+  total_amount: number;
+  buyer_notes?: string | null;
+};
+
+type SellerAnalytics = {
+  total_orders?: number;
+  total_bookings?: number;
+  total_sales?: number;
+  total_revenue?: number;
+};
+
+const formatCurrency = (value: number | undefined | null) => `₹${Number(value || 0).toFixed(2)}`;
+const formatDateTime = (value?: string) => (value ? new Date(value).toLocaleString() : "-");
+
+const STATUS_BADGE: Record<string, string> = {
+  pending: "bg-amber-50 text-amber-700 ring-1 ring-amber-200",
+  confirmed: "bg-sky-50 text-sky-700 ring-1 ring-sky-200",
+  preparing: "bg-violet-50 text-violet-700 ring-1 ring-violet-200",
+  out_for_delivery: "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200",
+  delivered: "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200",
+  completed: "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200",
+  cancelled: "bg-rose-50 text-rose-700 ring-1 ring-rose-200",
+  rescheduled: "bg-fuchsia-50 text-fuchsia-700 ring-1 ring-fuchsia-200",
+};
+
+const STATUS_LABEL: Record<string, string> = {
+  out_for_delivery: "Out for delivery",
+};
+
+function statusClass(status?: string) {
+  return STATUS_BADGE[status || ""] || "bg-slate-100 text-slate-600 ring-1 ring-slate-200";
+}
+
+function statusLabel(status?: string) {
+  if (!status) return "Unknown";
+  return STATUS_LABEL[status] || status.replace(/_/g, " ");
+}
+
+export default function SellerDashboardPage() {
   const router = useRouter();
-  const API = process.env.NEXT_PUBLIC_API_BASE_URL;
-  const [sellerData, setSellerData] = useState<any>(null);
+  const [authChecking, setAuthChecking] = useState(true);
+  const [token, setToken] = useState<string>("");
+  const [userRole, setUserRole] = useState<string | null>(null);
+  const [seller, setSeller] = useState<SellerProfile | null>(null);
+  const [sellerMissing, setSellerMissing] = useState(false);
+
   const [loading, setLoading] = useState(true);
-  const [deliveryRate, setDeliveryRate] = useState<number>(1.5);
-  const [deliveryPerKm, setDeliveryPerKm] = useState<number>(1.5);
-  const [latitude, setLatitude] = useState<string>('');
-  const [longitude, setLongitude] = useState<string>('');
-  const [updating, setUpdating] = useState(false);
-  const [orders, setOrders] = useState<any[]>([]);
-  const [ordersLoading, setOrdersLoading] = useState(false);
-  const [notification, setNotification] = useState<string | null>(null);
-  const [analytics, setAnalytics] = useState<any>(null);
-  const [statusFilter, setStatusFilter] = useState('');
-  const [searchTerm, setSearchTerm] = useState('');
-  const [page, setPage] = useState(1);
-  const [pageSize] = useState(10);
-  const [totalOrders, setTotalOrders] = useState(0);
-  const [listings, setListings] = useState<any[]>([]);
-  const [listingFilter, setListingFilter] = useState<'all' | 'product' | 'service'>('all');
+  const [listings, setListings] = useState<ListingItem[]>([]);
+  const [orders, setOrders] = useState<SellerOrder[]>([]);
+  const [bookings, setBookings] = useState<SellerBooking[]>([]);
+  const [analytics, setAnalytics] = useState<SellerAnalytics | null>(null);
+
+  const [globalError, setGlobalError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [busyDeleteId, setBusyDeleteId] = useState<number | null>(null);
+  const [busyOrderId, setBusyOrderId] = useState<number | null>(null);
+  const [busyBookingId, setBusyBookingId] = useState<number | null>(null);
+
+  const authHeaders = useCallback(
+    (json = false): HeadersInit => ({
+      Authorization: `Bearer ${token}`,
+      ...(json ? { "Content-Type": "application/json" } : {}),
+    }),
+    [token],
+  );
+
+  const loadDashboardData = useCallback(async () => {
+    if (!token) return;
+    setLoading(true);
+    setGlobalError(null);
+
+    const [listingsRes, ordersRes, bookingsRes, analyticsRes] = await Promise.allSettled([
+      fetch(`${API_BASE_URL}/api/v1/listings/seller?limit=200`, { headers: authHeaders() }),
+      fetch(`${API_BASE_URL}/api/v1/seller/orders?page=1&page_size=6`, { headers: authHeaders() }),
+      fetch(`${API_BASE_URL}/api/v1/bookings/seller/me?limit=6`, { headers: authHeaders() }),
+      fetch(`${API_BASE_URL}/api/v1/seller/analytics`, { headers: authHeaders() }),
+    ]);
+
+    let hasAnySuccess = false;
+
+    if (listingsRes.status === "fulfilled" && listingsRes.value.ok) {
+      hasAnySuccess = true;
+      const data = (await listingsRes.value.json()) as ListingItem[];
+      setListings(Array.isArray(data) ? data : []);
+    }
+
+    if (ordersRes.status === "fulfilled" && ordersRes.value.ok) {
+      hasAnySuccess = true;
+      const data = await ordersRes.value.json();
+      setOrders(Array.isArray(data?.orders) ? data.orders : []);
+    }
+
+    if (bookingsRes.status === "fulfilled" && bookingsRes.value.ok) {
+      hasAnySuccess = true;
+      const data = (await bookingsRes.value.json()) as SellerBooking[];
+      setBookings(Array.isArray(data) ? data : []);
+    }
+
+    if (analyticsRes.status === "fulfilled" && analyticsRes.value.ok) {
+      hasAnySuccess = true;
+      const data = (await analyticsRes.value.json()) as SellerAnalytics;
+      setAnalytics(data);
+    }
+
+    if (!hasAnySuccess) {
+      setGlobalError("We couldn't load seller dashboard data right now. Please retry.");
+    }
+
+    setLoading(false);
+  }, [authHeaders, token]);
 
   useEffect(() => {
-    // Fetch seller data from API
-    const fetchSellerData = async () => {
+    const init = async () => {
+      const storedToken = localStorage.getItem("token") || "";
+      if (!storedToken) {
+        router.replace("/login");
+        return;
+      }
+
+      setToken(storedToken);
+
       try {
-        const token = localStorage.getItem('token');
-        if (!token) {
-          router.push('/login');
+        const profileRes = await fetch(`${API_BASE_URL}/api/v1/users/me`, {
+          headers: { Authorization: `Bearer ${storedToken}` },
+        });
+
+        if (profileRes.status === 401) {
+          localStorage.removeItem("token");
+          router.replace("/login");
           return;
         }
 
-        const response = await fetch(`${API}/api/v1/sellers/me`, {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-          },
+        if (profileRes.ok) {
+          const profile = await profileRes.json();
+          setUserRole(profile?.role || null);
+        }
+
+        const sellerRes = await fetch(`${API_BASE_URL}/api/v1/sellers/me`, {
+          headers: { Authorization: `Bearer ${storedToken}` },
         });
 
-        if (response.ok) {
-          const data = await response.json();
-          setSellerData(data);
-          if (data.delivery_rate) {
-            setDeliveryRate(data.delivery_rate);
-          }
-          if (data.delivery_per_km) {
-            setDeliveryPerKm(data.delivery_per_km);
-          }
-          if (data.latitude !== null && data.latitude !== undefined) {
-            setLatitude(data.latitude.toString());
-          }
-          if (data.longitude !== null && data.longitude !== undefined) {
-            setLongitude(data.longitude.toString());
-          }
-        } else if (response.status === 401) {
-          localStorage.removeItem('token');
-          router.push('/login');
+        if (sellerRes.ok) {
+          const sellerData = (await sellerRes.json()) as SellerProfile;
+          setSeller(sellerData);
+          setSellerMissing(false);
+        } else if (sellerRes.status === 404) {
+          setSeller(null);
+          setSellerMissing(true);
+          setLoading(false);
+        } else if (sellerRes.status === 401) {
+          localStorage.removeItem("token");
+          router.replace("/login");
+          return;
         } else {
-          console.error('Failed to fetch seller data');
+          setGlobalError("Unable to verify seller profile right now.");
+          setLoading(false);
         }
-      } catch (error) {
-        console.error('Error fetching seller data:', error);
-      } finally {
+      } catch {
+        setGlobalError("Unable to load seller dashboard right now.");
         setLoading(false);
+      } finally {
+        setAuthChecking(false);
       }
     };
 
-    fetchSellerData();
-    fetchSellerOrders();
-    fetchAnalytics();
-    fetchListings();
-  }, []);
+    init();
+  }, [router]);
 
-  const fetchListings = async (type?: 'product' | 'service' | 'all') => {
+  useEffect(() => {
+    if (!token || sellerMissing || !seller) return;
+    loadDashboardData();
+  }, [token, sellerMissing, seller, loadDashboardData]);
+
+  const statItems = useMemo(() => {
+    const totalListings = listings.length;
+    const activeProducts = listings.filter((item) => item.type === "product").length;
+    const activeServices = listings.filter((item) => item.type === "service").length;
+    return [
+      { label: "Total Listings", value: totalListings },
+      { label: "Active Products", value: activeProducts },
+      { label: "Active Services", value: activeServices },
+      { label: "Orders", value: analytics?.total_orders ?? orders.length },
+      { label: "Bookings", value: analytics?.total_bookings ?? bookings.length },
+      { label: "Revenue", value: formatCurrency(analytics?.total_revenue ?? analytics?.total_sales) },
+    ];
+  }, [analytics, bookings.length, listings, orders.length]);
+
+  const handleListingDelete = async (listingId: number) => {
+    if (!confirm("Delete this listing? This action cannot be undone.")) return;
+    setBusyDeleteId(listingId);
     try {
-      const token = localStorage.getItem('token');
-      if (!token) {
-        router.push('/login');
-        return;
-      }
-
-      const filter = type && type !== 'all' ? `?listing_type=${type}` : '';
-      const response = await fetch(`${API}/api/v1/listings/seller${filter}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+      const res = await fetch(`${API_BASE_URL}/api/v1/listings/${listingId}`, {
+        method: "DELETE",
+        headers: authHeaders(),
       });
-
-      if (response.ok) {
-        const data = await response.json();
-        setListings(data);
-      }
-    } catch (error) {
-      console.error('Error fetching listings', error);
-    }
-  };
-
-  const fetchSellerOrders = async (params?: { page?: number; status?: string; search?: string }) => {
-    try {
-      setOrdersLoading(true);
-      const token = localStorage.getItem('token');
-      if (!token) {
-        router.push('/login');
-        return;
-      }
-
-      const query = new URLSearchParams({
-        page: String(params?.page ?? page),
-        page_size: String(pageSize),
-      });
-      if (params?.status ?? statusFilter) {
-        query.append('status', params?.status ?? statusFilter);
-      }
-      if (params?.search ?? searchTerm) {
-        query.append('search', params?.search ?? searchTerm);
-      }
-
-      const response = await fetch(`${API}/api/v1/seller/orders?${query.toString()}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setOrders(data.orders || []);
-        setTotalOrders(data.total || 0);
-      } else if (response.status === 401) {
-        localStorage.removeItem('token');
-        router.push('/login');
-      }
-    } catch (error) {
-      console.error('Error fetching seller orders', error);
+      if (!res.ok) throw new Error();
+      setListings((prev) => prev.filter((item) => item.id !== listingId));
+      setNotice("Listing deleted successfully.");
+    } catch {
+      setNotice("Unable to delete listing right now.");
     } finally {
-      setOrdersLoading(false);
-    }
-  };
-
-  const fetchAnalytics = async () => {
-    try {
-      const token = localStorage.getItem('token');
-      if (!token) {
-        router.push('/login');
-        return;
-      }
-
-      const response = await fetch(`${API}/api/v1/seller/analytics`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setAnalytics(data);
-      }
-    } catch (error) {
-      console.error('Error fetching analytics', error);
+      setBusyDeleteId(null);
     }
   };
 
   const handleOrderAction = async (orderId: number, action: string) => {
+    setBusyOrderId(orderId);
     try {
-      const token = localStorage.getItem('token');
-      if (!token) {
-        router.push('/login');
-        return;
-      }
-
-      const response = await fetch(`${API}/api/v1/seller/order-action`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
+      const res = await fetch(`${API_BASE_URL}/api/v1/seller/order-action`, {
+        method: "POST",
+        headers: authHeaders(true),
         body: JSON.stringify({ order_id: orderId, action }),
       });
-
-      if (response.ok) {
-        const data = await response.json();
-        setOrders((prev) =>
-          prev.map((order) =>
-            order.order_id === orderId
-              ? { ...order, status: data.status, payment_status: data.payment_status }
-              : order
-          )
-        );
-        fetchAnalytics();
-        setNotification(`Order #${orderId} updated to ${data.status}`);
-        setTimeout(() => setNotification(null), 3000);
-      } else {
-        alert('Unable to update order');
-      }
-    } catch (error) {
-      console.error('Order update failed', error);
-    }
-  };
-
-  const handleDeliveryRateUpdate = async () => {
-    setUpdating(true);
-    try {
-      const token = localStorage.getItem('token');
-      if (!token) {
-        router.push('/login');
-        return;
-      }
-
-      const payload: Record<string, number> = {
-        delivery_rate: deliveryRate,
-        delivery_per_km: deliveryPerKm,
-      };
-
-      if (latitude !== '' && !Number.isNaN(Number(latitude))) {
-        payload.latitude = parseFloat(latitude);
-      }
-
-      if (longitude !== '' && !Number.isNaN(Number(longitude))) {
-        payload.longitude = parseFloat(longitude);
-      }
-
-      const response = await fetch(`${API}/api/v1/sellers/me`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify(payload),
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setSellerData(data);
-        alert('Delivery rate updated successfully');
-      } else if (response.status === 401) {
-        localStorage.removeItem('token');
-        router.push('/login');
-      } else {
-        console.error('Failed to update delivery rate');
-        alert('Failed to update delivery rate');
-      }
-    } catch (error) {
-      console.error('Error updating delivery rate:', error);
-      alert('Error updating delivery rate');
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      setOrders((prev) => prev.map((order) => (order.order_id === orderId ? { ...order, status: data.status } : order)));
+      setNotice(`Order #${orderId} updated to ${statusLabel(data.status)}.`);
+    } catch {
+      setNotice("Unable to update order status.");
     } finally {
-      setUpdating(false);
+      setBusyOrderId(null);
     }
   };
 
-  if (loading) {
+  const handleBookingStatus = async (bookingId: number, status: string) => {
+    setBusyBookingId(bookingId);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/v1/bookings/${bookingId}/status`, {
+        method: "POST",
+        headers: authHeaders(true),
+        body: JSON.stringify({ status }),
+      });
+      if (!res.ok) throw new Error();
+      const updated = await res.json();
+      setBookings((prev) => prev.map((item) => (item.id === bookingId ? updated : item)));
+      setNotice(`Booking #${bookingId} marked as ${statusLabel(status)}.`);
+    } catch {
+      setNotice("Unable to update booking.");
+    } finally {
+      setBusyBookingId(null);
+    }
+  };
+
+  if (authChecking) {
     return (
-      <div className="flex justify-center items-center min-h-screen">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-500"></div>
+      <div className="app-shell">
+        <div className="app-container">
+          <div className="ds-card text-center text-sm text-slate-600">Checking seller access...</div>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="container mx-auto p-6">
-      <h1 className="text-3xl font-bold mb-6">Seller Dashboard</h1>
-
-      {notification && (
-        <div className="mb-6 rounded-xl bg-green-50 px-4 py-3 text-sm text-green-700">
-          {notification}
-        </div>
-      )}
-      
-      {sellerData && (
-        <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-          <h2 className="text-xl font-semibold mb-4">Seller Information</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <div className="app-shell">
+      <div className="app-container space-y-4">
+        <section className="ds-hero-card">
+          <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <label className="font-medium text-gray-700">Business Name:</label>
-              <p className="mt-1">{sellerData.business_name}</p>
+              <h1 className="text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">Seller Dashboard</h1>
+              <p className="mt-2 text-sm text-slate-600 sm:text-base">
+                Manage your products, services, orders, and bookings in one place.
+              </p>
             </div>
-            <div>
-              <label className="font-medium text-gray-700">Business Address:</label>
-              <p className="mt-1">{sellerData.business_address}</p>
-            </div>
-            <div>
-              <label className="font-medium text-gray-700">Business Description:</label>
-              <p className="mt-1">{sellerData.business_description}</p>
-            </div>
-            <div>
-              <label className="font-medium text-gray-700">Rating:</label>
-              <p className="mt-1">{sellerData.rating}</p>
-            </div>
-            <div>
-              <label className="font-medium text-gray-700">Approved:</label>
-              <p className="mt-1">{sellerData.approved ? 'Yes' : 'No'}</p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-white rounded-lg shadow-md p-6">
-          <h3 className="text-lg font-semibold mb-2">Total Orders</h3>
-          <p className="text-2xl font-bold">{analytics?.total_orders ?? 0}</p>
-        </div>
-        <div className="bg-white rounded-lg shadow-md p-6">
-          <h3 className="text-lg font-semibold mb-2">Total Sales</h3>
-          <p className="text-2xl font-bold">₹{analytics?.total_sales ?? 0}</p>
-        </div>
-        <div className="bg-white rounded-lg shadow-md p-6">
-          <h3 className="text-lg font-semibold mb-2">Total Bookings</h3>
-          <p className="text-2xl font-bold">{analytics?.total_bookings ?? 0}</p>
-        </div>
-        <div className="bg-white rounded-lg shadow-md p-6">
-          <h3 className="text-lg font-semibold mb-2">Total Revenue</h3>
-          <p className="text-2xl font-bold">₹{analytics?.total_revenue ?? 0}</p>
-        </div>
-      </div>
-
-      <div className="mt-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="bg-white rounded-lg shadow-md p-6 lg:col-span-2">
-          <h3 className="text-lg font-semibold mb-4">Revenue Trend</h3>
-          <div className="space-y-3">
-            {(analytics?.revenue_chart || []).map((point: any) => (
-              <div key={point.month} className="flex items-center gap-4">
-                <span className="w-20 text-sm text-gray-500">{point.month}</span>
-                <div className="flex-1 h-3 rounded-full bg-gray-100">
-                  <div
-                    className="h-3 rounded-full bg-purple-500"
-                    style={{ width: `${Math.min(point.value / 1000 * 100, 100)}%` }}
-                  />
-                </div>
-                <span className="text-sm font-medium">₹{point.value.toFixed(0)}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-        <div className="bg-white rounded-lg shadow-md p-6">
-          <h3 className="text-lg font-semibold mb-4">Top Products</h3>
-          <div className="space-y-3">
-            {(analytics?.top_products || []).map((product: any) => (
-              <div key={product.id} className="flex justify-between text-sm">
-                <span>{product.name}</span>
-                <span className="font-medium">{product.quantity}</span>
-              </div>
-            ))}
-            {(!analytics?.top_products || analytics.top_products.length === 0) && (
-              <p className="text-sm text-gray-500">No sales yet.</p>
+            {seller && (
+              <span className={`rounded-full px-3 py-1 text-xs font-semibold ${seller.approved ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
+                {seller.approved ? "Approved Seller" : "Approval Pending"}
+              </span>
             )}
           </div>
-        </div>
-        <div className="bg-white rounded-lg shadow-md p-6">
-          <h3 className="text-lg font-semibold mb-4">Top Services</h3>
-          <div className="space-y-3">
-            {(analytics?.top_services || []).map((service: any) => (
-              <div key={service.id} className="flex justify-between text-sm">
-                <span>{service.name}</span>
-                <span className="font-medium">{service.bookings}</span>
-              </div>
-            ))}
-            {(!analytics?.top_services || analytics.top_services.length === 0) && (
-              <p className="text-sm text-gray-500">No bookings yet.</p>
-            )}
-          </div>
-        </div>
-      </div>
-
-      <div className="mt-6 bg-white rounded-lg shadow-md p-6">
-        <h3 className="text-lg font-semibold mb-4">Low Stock Alerts</h3>
-        <div className="space-y-2">
-          {(analytics?.low_stock || []).map((item: any) => (
-            <div key={item.id} className="flex justify-between text-sm">
-              <span>{item.name}</span>
-              <span className="text-red-600 font-medium">{item.stock} left</span>
-            </div>
-          ))}
-          {(!analytics?.low_stock || analytics.low_stock.length === 0) && (
-            <p className="text-sm text-gray-500">All products are well stocked.</p>
+          {seller?.business_name && (
+            <p className="mt-3 text-sm text-slate-700">
+              {seller.business_name}
+              {seller.rating ? ` • ⭐ ${Number(seller.rating).toFixed(1)}` : ""}
+            </p>
           )}
-        </div>
-      </div>
+        </section>
 
-      <div className="mt-6 bg-white rounded-lg shadow-md p-6">
-        <h2 className="text-xl font-semibold mb-4">Delivery Settings</h2>
-        <div className="mb-4">
-          <label className="block text-gray-700 font-medium mb-2">
-            Delivery Rate (₹/km)
-          </label>
-          <input
-            type="number"
-            step="0.01"
-            min="0"
-            value={deliveryRate}
-            onChange={(e) => setDeliveryRate(parseFloat(e.target.value))}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md"
-          />
-        </div>
-        <div className="mb-4">
-          <label className="block text-gray-700 font-medium mb-2">
-            Delivery Per Km (₹/km)
-          </label>
-          <input
-            type="number"
-            step="0.01"
-            min="0"
-            value={deliveryPerKm}
-            onChange={(e) => setDeliveryPerKm(parseFloat(e.target.value))}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md"
-          />
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-          <div>
-            <label className="block text-gray-700 font-medium mb-2">
-              Latitude
-            </label>
-            <input
-              type="number"
-              step="0.000001"
-              value={latitude}
-              onChange={(e) => setLatitude(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md"
-            />
-          </div>
-          <div>
-            <label className="block text-gray-700 font-medium mb-2">
-              Longitude
-            </label>
-            <input
-              type="number"
-              step="0.000001"
-              value={longitude}
-              onChange={(e) => setLongitude(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md"
-            />
-          </div>
-        </div>
-        <button
-          onClick={handleDeliveryRateUpdate}
-          disabled={updating}
-          className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50"
-        >
-          {updating ? 'Updating...' : 'Update Delivery Rate'}
-        </button>
-      </div>
+        {notice && <section className="ds-card text-sm text-emerald-700">{notice}</section>}
+        {globalError && <section className="ds-card text-sm text-rose-700">{globalError}</section>}
 
-      <div className="mt-6 flex flex-wrap gap-3">
-        <button
-          className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600"
-          onClick={() => router.push('/add-product')}
-        >
-          Add Listing
-        </button>
-        <button
-          className="px-4 py-2 bg-purple-500 text-white rounded hover:bg-purple-600"
-          onClick={() => router.push('/booking-management')}
-        >
-          Manage Bookings
-        </button>
-      </div>
-
-      <div className="mt-6 bg-white rounded-lg shadow-md p-6">
-        <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
-          <h2 className="text-xl font-semibold">All Listings</h2>
-          <div className="flex gap-2">
-            {['all', 'product', 'service'].map((filter) => (
-              <button
-                key={filter}
-                onClick={() => {
-                  const nextFilter = filter as 'all' | 'product' | 'service';
-                  setListingFilter(nextFilter);
-                  fetchListings(nextFilter);
-                }}
-                className={`px-3 py-1 rounded-full text-sm ${
-                  listingFilter === filter
-                    ? 'bg-purple-600 text-white'
-                    : 'border border-gray-200 text-gray-600'
-                }`}
-              >
-                {filter.charAt(0).toUpperCase() + filter.slice(1)}
-              </button>
-            ))}
-          </div>
-        </div>
-        {listings.length === 0 ? (
-          <p className="text-gray-500">No listings yet.</p>
+        {sellerMissing ? (
+          <section className="ds-card">
+            <h2 className="ds-title">Complete your seller setup</h2>
+            <p className="ds-subtitle">
+              We couldn't find your seller profile yet. Become a seller from profile, then return here.
+            </p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <button className="ds-btn-primary" onClick={() => router.push("/profile")}>Go to Profile</button>
+              <button className="ds-btn-secondary" onClick={() => router.push("/")}>Back to Home</button>
+            </div>
+          </section>
         ) : (
-          <div className="grid gap-4 md:grid-cols-2">
-            {listings.map((listing) => (
-              <div key={listing.id} className="border rounded-lg p-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="font-semibold">{listing.title}</p>
-                    <p className="text-sm text-gray-500">{listing.type}</p>
-                  </div>
-                  <span className="text-sm font-medium">₹{listing.price}</span>
-                </div>
-                <div className="mt-2 text-sm text-gray-500">
-                  {listing.description || 'No description'}
-                </div>
-                <div className="mt-3 flex flex-wrap gap-2 text-xs">
-                  {listing.type === 'product' && (
-                    <span className="rounded-full bg-blue-50 px-2 py-1 text-blue-700">
-                      Stock {listing.stock ?? 0}
-                    </span>
-                  )}
-                  {listing.type === 'service' && (
-                    <>
-                      <span className="rounded-full bg-purple-50 px-2 py-1 text-purple-700">
-                        {listing.duration_minutes ?? 0} min
-                      </span>
-                      <button
-                        onClick={() => router.push(`/seller/slots/${listing.id}`)}
-                        className="rounded-full bg-purple-600 px-2 py-1 text-white"
-                      >
-                        Manage Slots
-                      </button>
-                    </>
-                  )}
-                </div>
+          <>
+            <section className="ds-card">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <h2 className="ds-title">Quick Stats</h2>
+                <button className="ds-btn-secondary !px-4" onClick={loadDashboardData}>Refresh</button>
               </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      <div className="mt-10 bg-white rounded-lg shadow-md p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-semibold">Delivery Orders</h2>
-          <button
-            className="text-sm text-blue-600 hover:underline"
-            onClick={() => fetchSellerOrders({ page: 1 })}
-          >
-            Refresh
-          </button>
-        </div>
-        <div className="mb-4 flex flex-col md:flex-row gap-3">
-          <input
-            value={searchTerm}
-            onChange={(event) => setSearchTerm(event.target.value)}
-            placeholder="Search by product or buyer"
-            className="flex-1 rounded-lg border border-gray-200 px-4 py-2 text-sm"
-          />
-          <select
-            value={statusFilter}
-            onChange={(event) => setStatusFilter(event.target.value)}
-            className="rounded-lg border border-gray-200 px-4 py-2 text-sm"
-          >
-            <option value="">All Status</option>
-            <option value="pending">Pending</option>
-            <option value="confirmed">Confirmed</option>
-            <option value="preparing">Preparing</option>
-            <option value="out_for_delivery">Out for Delivery</option>
-            <option value="delivered">Delivered</option>
-            <option value="cancelled">Cancelled</option>
-          </select>
-          <button
-            className="px-4 py-2 bg-purple-600 text-white rounded"
-            onClick={() => {
-              setPage(1);
-              fetchSellerOrders({ page: 1, status: statusFilter, search: searchTerm });
-            }}
-          >
-            Apply
-          </button>
-        </div>
-        {ordersLoading ? (
-          <p className="text-gray-500">Loading orders...</p>
-        ) : orders.length === 0 ? (
-          <p className="text-gray-500">No orders yet.</p>
-        ) : (
-          <div className="space-y-4">
-            {orders.map((order) => (
-              <div key={order.order_id} className="border rounded-lg p-4">
-                <div className="flex flex-wrap items-center justify-between gap-4">
-                  <div>
-                    <p className="font-semibold">Order #{order.order_id}</p>
-                    <p className="text-sm text-gray-500">Status: {order.status}</p>
-                    <p className="text-sm text-gray-500">Payment: {order.payment_status}</p>
-                    {order.buyer?.name && (
-                      <p className="text-sm text-gray-500">Buyer: {order.buyer.name}</p>
-                    )}
-                  </div>
-                  <div className="text-sm text-gray-500">₹{order.final_amount ?? order.total_amount}</div>
+              {loading ? (
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                  {Array.from({ length: 6 }).map((_, index) => (
+                    <div key={index} className="h-20 animate-pulse rounded-xl border border-slate-200 bg-slate-100" />
+                  ))}
                 </div>
-                <div className="mt-3 grid gap-2 text-sm text-gray-600">
-                  {(order.items || []).map((item: any) => (
-                    <div key={`${order.order_id}-${item.id}`} className="flex justify-between">
-                      <span>{item.name} × {item.quantity}</span>
-                      <span>₹{(item.price * item.quantity).toFixed(2)}</span>
+              ) : (
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                  {statItems.map((item) => (
+                    <div key={item.label} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                      <p className="text-xs font-medium uppercase tracking-wide text-slate-500">{item.label}</p>
+                      <p className="mt-2 text-lg font-semibold text-slate-900">{item.value}</p>
                     </div>
                   ))}
                 </div>
-                <div className="mt-3 flex flex-wrap gap-2">
+              )}
+            </section>
+
+            <section className="ds-card">
+              <h2 className="ds-title">Quick Actions</h2>
+              <p className="ds-subtitle">Start common seller tasks with one tap.</p>
+              <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+                {[
+                  { label: "Add Product", href: "/add-product" },
+                  { label: "Add Service", href: "/add-product" },
+                  { label: "Manage Products", href: "/my-products" },
+                  { label: "Manage Orders", href: "/seller-dashboard#orders" },
+                  { label: "Manage Bookings", href: "/booking-management" },
+                  { label: "Manage Slots", href: listings.find((l) => l.type === "service") ? `/seller/slots/${listings.find((l) => l.type === "service")?.id}` : "/my-products" },
+                  { label: "View Store", href: seller ? `/store/${seller.id}` : "/search" },
+                  { label: userRole === "seller" ? "Edit Profile" : "Become Seller", href: "/profile" },
+                ].map((action) => (
                   <button
-                    className="px-3 py-1 rounded bg-indigo-50 text-indigo-700 text-sm"
-                    onClick={() => handleOrderAction(order.order_id, 'confirm')}
-                    disabled={order.status !== 'pending'}
+                    key={action.label}
+                    onClick={() => router.push(action.href)}
+                    className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-left text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-white"
                   >
-                    Confirm
+                    {action.label}
                   </button>
-                  <button
-                    className="px-3 py-1 rounded bg-yellow-50 text-yellow-700 text-sm"
-                    onClick={() => handleOrderAction(order.order_id, 'prepare')}
-                    disabled={order.status !== 'confirmed'}
-                  >
-                    Preparing
-                  </button>
-                  <button
-                    className="px-3 py-1 rounded bg-blue-50 text-blue-700 text-sm"
-                    onClick={() => handleOrderAction(order.order_id, 'out_for_delivery')}
-                    disabled={order.status !== 'preparing'}
-                  >
-                    Out for Delivery
-                  </button>
-                  <button
-                    className="px-3 py-1 rounded bg-green-50 text-green-700 text-sm"
-                    onClick={() => handleOrderAction(order.order_id, 'deliver')}
-                    disabled={order.status !== 'out_for_delivery'}
-                  >
-                    Delivered
-                  </button>
-                  <button
-                    className="px-3 py-1 rounded bg-red-50 text-red-700 text-sm"
-                    onClick={() => handleOrderAction(order.order_id, 'cancel')}
-                  >
-                    Cancel
-                  </button>
-                </div>
+                ))}
               </div>
-            ))}
-          </div>
+            </section>
+
+            <section className="ds-card">
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <h2 className="ds-title">Listing Management</h2>
+                <button className="ds-btn-secondary !px-4" onClick={() => router.push("/my-products")}>View All</button>
+              </div>
+
+              {!loading && listings.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-6 text-center">
+                  <p className="text-base font-semibold text-slate-800">You have not added any listings yet</p>
+                  <p className="mt-1 text-sm text-slate-600">Create your first product or service to start selling.</p>
+                  <button className="ds-btn-primary mt-4" onClick={() => router.push("/add-product")}>Add Your First Listing</button>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {listings.slice(0, 6).map((listing) => (
+                    <article key={listing.id} className="rounded-xl border border-slate-200 bg-white p-3">
+                      <div className="flex gap-3">
+                        <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-lg bg-slate-100">
+                          <Image
+                            src={resolveProductImageSrc(listing.image_url, API_BASE_URL) || FALLBACK_PRODUCT_IMAGE}
+                            alt={listing.title}
+                            fill
+                            unoptimized
+                            className="object-cover"
+                          />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <p className="line-clamp-1 text-sm font-semibold text-slate-900">{listing.title}</p>
+                            <span className="text-sm font-semibold text-slate-900">{formatCurrency(listing.price)}</span>
+                          </div>
+                          <div className="mt-1 flex flex-wrap gap-2 text-xs">
+                            <span className={`rounded-full px-2 py-1 font-medium ${listing.type === "service" ? "bg-indigo-50 text-indigo-700" : "bg-emerald-50 text-emerald-700"}`}>
+                              {listing.type === "service" ? "Service" : "Product"}
+                            </span>
+                            {listing.type === "product" && <span className="rounded-full bg-slate-100 px-2 py-1 text-slate-600">Stock {listing.stock ?? 0}</span>}
+                            {listing.type === "service" && <span className="rounded-full bg-slate-100 px-2 py-1 text-slate-600">{listing.duration_minutes ?? 0} min</span>}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <button className="ds-chip !py-1.5 !text-xs" onClick={() => router.push(`/add-product?edit=${listing.id}`)}>Edit</button>
+                        <button className="ds-chip !py-1.5 !text-xs" onClick={() => router.push(`/search?q=${encodeURIComponent(listing.title)}`)}>View</button>
+                        {listing.type === "service" && (
+                          <button className="ds-chip !py-1.5 !text-xs" onClick={() => router.push(`/seller/slots/${listing.id}`)}>Manage Slots</button>
+                        )}
+                        <button
+                          className="rounded-full border border-rose-200 px-3 py-1.5 text-xs font-medium text-rose-700"
+                          disabled={busyDeleteId === listing.id}
+                          onClick={() => handleListingDelete(listing.id)}
+                        >
+                          {busyDeleteId === listing.id ? "Deleting..." : "Delete"}
+                        </button>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              )}
+            </section>
+
+            <section id="orders" className="ds-card">
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <h2 className="ds-title">Order Management</h2>
+                <button className="ds-btn-secondary !px-4" onClick={() => router.push("/my-orders")}>Open Full Orders</button>
+              </div>
+
+              {!loading && orders.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-6 text-center text-sm text-slate-600">
+                  No orders yet. Once buyers place orders, they will appear here.
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {orders.map((order) => (
+                    <article key={order.order_id} className="rounded-xl border border-slate-200 bg-white p-4">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-semibold text-slate-900">Order #{order.order_id}</p>
+                          <p className="text-xs text-slate-500">{formatDateTime(order.created_at)}</p>
+                          <p className="mt-1 text-xs text-slate-600">Buyer: {order.buyer?.name || "N/A"}</p>
+                        </div>
+                        <div className="text-right">
+                          <span className={`inline-block rounded-full px-2.5 py-1 text-xs font-semibold ${statusClass(order.status)}`}>
+                            {statusLabel(order.status)}
+                          </span>
+                          <p className="mt-2 text-sm font-semibold text-slate-900">{formatCurrency(order.final_amount ?? order.total_amount)}</p>
+                        </div>
+                      </div>
+                      {!!order.items?.length && (
+                        <p className="mt-2 text-xs text-slate-600 line-clamp-1">
+                          {(order.items || []).slice(0, 2).map((item) => `${item.name} × ${item.quantity}`).join(" • ")}
+                        </p>
+                      )}
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {order.status === "pending" && (
+                          <button className="ds-chip !py-1.5 !text-xs" disabled={busyOrderId === order.order_id} onClick={() => handleOrderAction(order.order_id, "confirm")}>Confirm</button>
+                        )}
+                        {order.status === "confirmed" && (
+                          <button className="ds-chip !py-1.5 !text-xs" disabled={busyOrderId === order.order_id} onClick={() => handleOrderAction(order.order_id, "prepare")}>Preparing</button>
+                        )}
+                        {order.status === "preparing" && (
+                          <button className="ds-chip !py-1.5 !text-xs" disabled={busyOrderId === order.order_id} onClick={() => handleOrderAction(order.order_id, "out_for_delivery")}>Out for delivery</button>
+                        )}
+                        {order.status === "out_for_delivery" && (
+                          <button className="ds-chip !py-1.5 !text-xs" disabled={busyOrderId === order.order_id} onClick={() => handleOrderAction(order.order_id, "deliver")}>Delivered</button>
+                        )}
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              )}
+            </section>
+
+            <section className="ds-card">
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <h2 className="ds-title">Booking Management</h2>
+                <button className="ds-btn-secondary !px-4" onClick={() => router.push("/booking-management")}>Open Full Bookings</button>
+              </div>
+
+              {!loading && bookings.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-6 text-center text-sm text-slate-600">
+                  No bookings yet. Service bookings will appear here.
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {bookings.map((booking) => (
+                    <article key={booking.id} className="rounded-xl border border-slate-200 bg-white p-4">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-semibold text-slate-900">Booking #{booking.id}</p>
+                          <p className="text-xs text-slate-500">{formatDateTime(booking.booking_time)}</p>
+                          <p className="mt-1 text-xs text-slate-600">Service #{booking.listing_id ?? booking.service_id}</p>
+                        </div>
+                        <div className="text-right">
+                          <span className={`inline-block rounded-full px-2.5 py-1 text-xs font-semibold ${statusClass(booking.status)}`}>
+                            {statusLabel(booking.status)}
+                          </span>
+                          <p className="mt-2 text-sm font-semibold text-slate-900">{formatCurrency(booking.total_amount)}</p>
+                        </div>
+                      </div>
+                      {booking.buyer_notes && <p className="mt-2 text-xs text-slate-600">Buyer note: {booking.buyer_notes}</p>}
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <button className="ds-chip !py-1.5 !text-xs" onClick={() => router.push(`/seller/slots/${booking.listing_id ?? booking.service_id}`)}>
+                          Manage Slot
+                        </button>
+                        {booking.status === "pending" && (
+                          <button className="ds-chip !py-1.5 !text-xs" disabled={busyBookingId === booking.id} onClick={() => handleBookingStatus(booking.id, "confirmed")}>Confirm</button>
+                        )}
+                        {booking.status !== "completed" && booking.status !== "cancelled" && (
+                          <button className="ds-chip !py-1.5 !text-xs" disabled={busyBookingId === booking.id} onClick={() => handleBookingStatus(booking.id, "completed")}>Complete</button>
+                        )}
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              )}
+            </section>
+          </>
         )}
-        <div className="mt-4 flex items-center justify-between text-sm text-gray-500">
-          <span>Showing {orders.length} of {totalOrders}</span>
-          <div className="flex gap-2">
-            <button
-              className="px-3 py-1 rounded border"
-              onClick={() => {
-                const newPage = Math.max(page - 1, 1);
-                setPage(newPage);
-                fetchSellerOrders({ page: newPage });
-              }}
-              disabled={page === 1}
-            >
-              Previous
-            </button>
-            <button
-              className="px-3 py-1 rounded border"
-              onClick={() => {
-                const totalPages = Math.ceil(totalOrders / pageSize);
-                const newPage = Math.min(page + 1, totalPages || 1);
-                setPage(newPage);
-                fetchSellerOrders({ page: newPage });
-              }}
-              disabled={page >= Math.ceil(totalOrders / pageSize)}
-            >
-              Next
-            </button>
-          </div>
-        </div>
       </div>
     </div>
   );
-};
-
-export default SellerDashboard;
+}
