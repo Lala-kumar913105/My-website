@@ -2,6 +2,7 @@ from datetime import datetime, timedelta
 import secrets
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app import crud, schemas
@@ -75,7 +76,7 @@ def register_with_email(
     normalized_email = payload.email.strip().lower()
     existing_user = crud.get_user_by_email(db, email=normalized_email)
     if existing_user:
-        raise HTTPException(status_code=400, detail="Email already registered")
+        raise HTTPException(status_code=409, detail="Email already registered")
 
     try:
         validate_password_length(payload.password)
@@ -90,20 +91,42 @@ def register_with_email(
         first_name = name_parts[0]
         last_name = name_parts[1] if len(name_parts) > 1 else None
 
+    # NOTE:
+    # Production DBs with older migrations may still enforce role enum values
+    # like ADMIN/SELLER/USER/DELIVERY_PARTNER only (without BUYER/BOTH).
+    # Use USER at write-time for backward compatibility, while app logic
+    # normalizes USER to BUYER where needed.
     user = User(
         email=normalized_email,
         hashed_password=hashed_password,
         password=None,
         first_name=first_name,
         last_name=last_name,
-        role=RoleEnum.BUYER,
+        role=RoleEnum.USER,
         is_active=True,
     )
-    db.add(user)
-    db.commit()
-    db.refresh(user)
 
-    _ensure_profile(db, user.id, payload.full_name)
+    try:
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+        _ensure_profile(db, user.id, payload.full_name)
+    except IntegrityError as exc:
+        db.rollback()
+        # Keep duplicate email errors readable for frontend UX
+        raise HTTPException(status_code=409, detail="Email already registered") from exc
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail="Could not create account at the moment. Please try again.",
+        ) from exc
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail="Unexpected server error while creating account.",
+        ) from exc
 
     access_token = create_access_token(data={"sub": str(user.id), "user_id": user.id})
     refresh_token = create_refresh_token(data={"sub": str(user.id), "user_id": user.id})
