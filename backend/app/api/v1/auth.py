@@ -83,6 +83,11 @@ def register_with_email(
         hashed_password = get_password_hash(payload.password)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail="Could not process password securely. Please try again.",
+        ) from exc
 
     first_name = None
     last_name = None

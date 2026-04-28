@@ -29,6 +29,7 @@ export default function RegisterPage() {
 
   const checks = {
     min: password.length >= 8,
+    maxBytes: new TextEncoder().encode(password).length <= 72,
     lower: /[a-z]/.test(password),
     upper: /[A-Z]/.test(password),
     number: /\d/.test(password),
@@ -41,7 +42,7 @@ export default function RegisterPage() {
     if (!email.trim()) next.email = 'Email is required';
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim().toLowerCase())) next.email = 'Enter a valid email address';
 
-    if (!checks.min || !checks.lower || !checks.upper || !checks.number || !checks.special) {
+    if (!checks.min || !checks.maxBytes || !checks.lower || !checks.upper || !checks.number || !checks.special) {
       next.password = 'Password does not meet security requirements';
     }
     if (!confirmPassword) next.confirmPassword = 'Confirm your password';
@@ -110,6 +111,7 @@ export default function RegisterPage() {
               {errors.password && <p className="mt-1 text-xs text-rose-600">{errors.password}</p>}
               <ul className="mt-2 grid grid-cols-1 gap-1 text-xs text-slate-600">
                 <li className={checks.min ? 'text-emerald-700' : ''}>• At least 8 characters</li>
+                <li className={checks.maxBytes ? 'text-emerald-700' : ''}>• At most 72 bytes</li>
                 <li className={checks.lower ? 'text-emerald-700' : ''}>• One lowercase letter</li>
                 <li className={checks.upper ? 'text-emerald-700' : ''}>• One uppercase letter</li>
                 <li className={checks.number ? 'text-emerald-700' : ''}>• One number</li>

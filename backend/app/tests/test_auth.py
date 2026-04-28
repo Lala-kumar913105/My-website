@@ -37,6 +37,23 @@ async def test_register_rejects_password_longer_than_72_bytes(async_client):
 
 
 @pytest.mark.asyncio
+async def test_register_accepts_normal_password(async_client):
+    response = await async_client.post(
+        "/api/v1/auth/register",
+        json={
+            "email": "normal-password@example.com",
+            "password": "Test@12345",
+            "full_name": "Normal Password User",
+        },
+    )
+
+    assert response.status_code == 201
+    data = response.json()
+    assert data["message"] == "Registration successful"
+    assert data["user"]["email"] == "normal-password@example.com"
+
+
+@pytest.mark.asyncio
 async def test_login_and_me_flow(async_client):
     await async_client.post(
         "/api/v1/auth/register",

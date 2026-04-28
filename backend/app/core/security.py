@@ -29,17 +29,19 @@ PASSWORD_MAX_LENGTH = 72
 
 def _normalize_bcrypt_password(password: str) -> str:
     """
-    bcrypt supports at most 72 bytes of input.
-    This helper safely truncates UTF-8 bytes to 72 and decodes back.
+    Normalize password input before bcrypt operations.
+
+    - Convert incoming password-like value to str
+    - Truncate to bcrypt-compatible 72 characters
     """
     if password is None:
         raise ValueError("Password is required")
 
-    password_bytes = password.encode("utf-8")
-    if len(password_bytes) > PASSWORD_MAX_LENGTH:
-        password_bytes = password_bytes[:PASSWORD_MAX_LENGTH]
+    normalized = str(password)
+    if len(normalized) > PASSWORD_MAX_LENGTH:
+        normalized = normalized[:PASSWORD_MAX_LENGTH]
 
-    return password_bytes.decode("utf-8", errors="ignore")
+    return normalized
 
 
 def validate_password_length(password: str) -> None:
