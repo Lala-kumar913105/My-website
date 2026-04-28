@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import ListingCard, { Listing } from "../components/ListingCard";
 import { API_BASE_URL } from "../../lib/auth";
@@ -51,7 +51,7 @@ const mapTypeFromQuery = (rawType: string | null): ListingTypeFilter => {
   return "all";
 };
 
-export default function SearchPage() {
+function SearchContent() {
   const searchParams = useSearchParams();
 
   const [query, setQuery] = useState(searchParams.get("q") ?? "");
@@ -444,5 +444,13 @@ export default function SearchPage() {
         </section>
       </div>
     </div>
+  );
+}
+
+export default function SearchPage() {
+  return (
+    <Suspense fallback={<div>Loading search...</div>}>
+      <SearchContent />
+    </Suspense>
   );
 }
