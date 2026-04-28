@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 
 from app.api.v1 import (
+    assistant,
     auth,
     users,
     sellers,
@@ -37,6 +38,9 @@ from app.api.v1 import (
 from app.api import upload
 
 router = APIRouter()
+
+# Assistant
+router.include_router(assistant.router, prefix="/assistant", tags=["assistant"])
 
 # Authentication
 router.include_router(auth.router, prefix="/auth", tags=["auth"])

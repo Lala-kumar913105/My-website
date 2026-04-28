@@ -23,7 +23,8 @@ class BookingBase(BaseModel):
 
 
 class BookingCreate(BaseModel):
-    service_id: int
+    service_id: Optional[int] = None
+    listing_id: Optional[int] = None
     booking_time: datetime
     notes: Optional[str] = Field(default=None, max_length=500)
     buyer_notes: Optional[str] = Field(default=None, max_length=500)
@@ -34,6 +35,7 @@ class BookingUpdate(BaseModel):
     status: Optional[BookingStatus] = None
     notes: Optional[str] = Field(default=None, max_length=500)
     buyer_notes: Optional[str] = Field(default=None, max_length=500)
+    seller_notes: Optional[str] = Field(default=None, max_length=500)
     reschedule_requested: Optional[int] = Field(default=None, ge=0, le=1)
     original_booking_time: Optional[datetime] = None
 

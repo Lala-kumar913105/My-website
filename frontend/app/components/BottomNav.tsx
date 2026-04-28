@@ -5,8 +5,9 @@ import { usePathname } from "next/navigation";
 
 const navItems = [
   { href: "/", label: "Home", icon: "🏠" },
-  { href: "/services", label: "Search", icon: "🔍" },
-  { href: "/my-orders", label: "Orders", icon: "📦" },
+  { href: "/search", label: "Search", icon: "🔍" },
+  { href: "/social-feed", label: "Social", icon: "🌐" },
+  { href: "/assistant", label: "AI Assistant", icon: "🧠" },
   { href: "/profile", label: "Profile", icon: "👤" },
 ];
 
@@ -14,20 +15,20 @@ export default function BottomNav() {
   const pathname = usePathname();
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-40 border-t border-slate-200 bg-white/95 backdrop-blur md:hidden">
-      <div className="mx-auto flex max-w-lg items-center justify-between px-6 py-2">
+    <nav className="ds-bottom-nav-wrap">
+      <div className="ds-bottom-nav">
         {navItems.map((item) => {
-          const isActive = pathname === item.href;
+          const isActive = pathname === item.href || (item.href !== "/" && pathname?.startsWith(item.href));
           return (
             <Link
               key={item.href}
               href={item.href}
-              className={`flex flex-col items-center gap-1 text-xs ${
-                isActive ? "text-purple-600" : "text-slate-500"
+              className={`ds-bottom-nav-item ${
+                isActive ? "ds-bottom-nav-item-active" : "hover:bg-slate-50"
               }`}
             >
               <span className="text-lg">{item.icon}</span>
-              {item.label}
+              <span className="truncate">{item.label}</span>
             </Link>
           );
         })}

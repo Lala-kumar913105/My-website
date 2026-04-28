@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
 
@@ -20,8 +20,14 @@ type CoinSnapshot = {
   badge_label?: string | null
 }
 
-const DEFAULT_AVATAR = '/default-avatar.png'
+type SellerProfile = {
+  id: number
+  user_id: number
+  business_name: string
+  approved?: boolean | null
+}
 
+const DEFAULT_AVATAR = '/default-avatar.png'
 const MAX_IMAGE_SIZE = 2 * 1024 * 1024
 
 const isJsonResponse = (response: Response) =>
@@ -35,17 +41,48 @@ const parseJsonResponse = async (response: Response) => {
   return response.json()
 }
 
+const getReadableUploadError = (rawDetail: string) => {
+  const detail = (rawDetail || '').trim()
+  if (!detail) return 'Unable to upload avatar. Please try again.'
+
+  return detail
+    .replace(/^Avatar upload failed:\s*/i, '')
+    .replace(/^Upload failed:\s*/i, '')
+}
+
+const normalizeProfileData = (data: any): ProfilePayload => {
+  const fullName =
+    data?.name?.trim() ||
+    [data?.first_name, data?.last_name].filter(Boolean).join(' ').trim() ||
+    ''
+
+  return {
+    name: fullName,
+    username: data?.username ?? '',
+    email: data?.email ?? '',
+    phone: data?.phone ?? data?.phone_number ?? '',
+    location: data?.location ?? '',
+    bio: data?.bio ?? '',
+    profileImage: data?.profileImage ?? data?.profile_image ?? '',
+  }
+}
+
 export default function ProfilePage() {
   const router = useRouter()
+
   const apiBaseUrl = useMemo(() => {
     const rawBase = process.env.NEXT_PUBLIC_API_BASE_URL?.trim()
     if (!rawBase) {
-      console.error('NEXT_PUBLIC_API_BASE_URL is missing. Falling back to https://api.zivolf.com')
+      console.error(
+        'NEXT_PUBLIC_API_BASE_URL is missing. Falling back to https://api.zivolf.com'
+      )
       return 'https://api.zivolf.com'
     }
+
     const normalized = rawBase.replace(/\/$/, '')
     return normalized.replace(/\/api\/v1\/?$/, '')
   }, [])
+
   const [profile, setProfile] = useState<ProfilePayload | null>(null)
   const [formData, setFormData] = useState<ProfilePayload>({
     name: '',
@@ -56,41 +93,112 @@ export default function ProfilePage() {
     bio: '',
     profileImage: '',
   })
-  const [avatarPreview, setAvatarPreview] = useState<string>('')
+  const [avatarPreview, setAvatarPreview] = useState<string>(DEFAULT_AVATAR)
   const [error, setError] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
   const [isUploading, setIsUploading] = useState(false)
-  const [isDarkMode, setIsDarkMode] = useState(false)
   const [coins, setCoins] = useState<CoinSnapshot | null>(null)
+  const [sellerProfile, setSellerProfile] = useState<SellerProfile | null>(null)
+  const [sellerLoading, setSellerLoading] = useState(false)
+  const [becomingSeller, setBecomingSeller] = useState(false)
 
-  const themeClasses = useMemo(
-    () =>
-      isDarkMode
-        ? 'bg-slate-950 text-slate-100'
-        : 'bg-slate-50 text-slate-900',
-    [isDarkMode]
+  const handleSessionExpired = useCallback(
+    (message = 'Session expired. Please login again.') => {
+      localStorage.removeItem('token')
+      localStorage.removeItem('phone_number')
+      localStorage.removeItem('otp')
+      setCoins(null)
+      setProfile(null)
+      setError(message)
+      toast.error(message)
+      router.push('/login')
+    },
+    [router]
   )
 
-  const handleSessionExpired = (message = 'Session expired. Please login again.') => {
-    localStorage.removeItem('token')
-    localStorage.removeItem('phone_number')
-    localStorage.removeItem('otp')
-    setCoins(null)
-    setProfile(null)
-    setError(message)
-    toast.error(message)
-    router.push('/login')
-  }
-
-  useEffect(() => {
+  const getStoredAuth = useCallback(() => {
     const rawToken = localStorage.getItem('token')
-    const token = rawToken?.replace(/^Bearer\s+/i, '').trim()
-    const phoneNumber = localStorage.getItem('phone_number')?.trim()
-    const otp = localStorage.getItem('otp')?.trim()
+    const token = rawToken?.replace(/^Bearer\s+/i, '').trim() || ''
+    const phoneNumber = localStorage.getItem('phone_number')?.trim() || ''
+    const otp = localStorage.getItem('otp')?.trim() || ''
 
-    if (!token && !phoneNumber) {
+    return { token, phoneNumber, otp }
+  }, [])
+
+  const fetchSellerProfile = useCallback(async (token: string) => {
+    setSellerLoading(true)
+    try {
+      const response = await fetch(`${apiBaseUrl}/api/v1/sellers/me`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        setSellerProfile(data)
+        return
+      }
+
+      if (response.status === 404) {
+        setSellerProfile(null)
+        return
+      }
+
+      if (response.status === 401) {
+        handleSessionExpired('Session expired. Please login again.')
+        return
+      }
+
+      setSellerProfile(null)
+    } catch {
+      setSellerProfile(null)
+    } finally {
+      setSellerLoading(false)
+    }
+  }, [apiBaseUrl, handleSessionExpired])
+
+  const handleBecomeSeller = useCallback(async () => {
+    const token = getStoredAuth().token
+    if (!token) {
       handleSessionExpired('Please login to continue.')
       return
+    }
+
+    try {
+      setBecomingSeller(true)
+      const response = await fetch(`${apiBaseUrl}/api/v1/sellers/become-seller`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+
+      if (response.status === 401) {
+        handleSessionExpired('Session expired. Please login again.')
+        return
+      }
+
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => '')
+        throw new Error(errorText || 'Failed to become seller')
+      }
+
+      const sellerData = await response.json()
+      setSellerProfile(sellerData)
+      toast.success('You are now a seller')
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to become seller')
+    } finally {
+      setBecomingSeller(false)
+    }
+  }, [apiBaseUrl, getStoredAuth, handleSessionExpired])
+
+  const buildAuthHeaders = useCallback((): HeadersInit | null => {
+    const { token, phoneNumber, otp } = getStoredAuth()
+
+    if (!token && !phoneNumber) {
+      return null
     }
 
     const headers: HeadersInit = {}
@@ -107,77 +215,125 @@ export default function ProfilePage() {
       headers['x-otp'] = otp
     }
 
-    fetch('/api/profile', {
-      headers,
-      cache: 'no-store',
-    })
-      .then(async (res) => {
+    return headers
+  }, [getStoredAuth])
+
+  useEffect(() => {
+    let isMounted = true
+
+    const fetchProfile = async () => {
+      const headers = buildAuthHeaders()
+
+      if (!headers) {
+        handleSessionExpired('Please login to continue.')
+        return
+      }
+
+      try {
+        setError(null)
+
+        const res = await fetch('/api/profile', {
+          headers,
+          cache: 'no-store',
+        })
+
         if (res.status === 401) {
           handleSessionExpired('Session expired. Please login again.')
-          return null
-        }
-        if (!res.ok) {
-          throw new Error('Profile not available')
-        }
-        return parseJsonResponse(res)
-      })
-      .then((data) => {
-        if (!data) {
           return
         }
+
+        if (!res.ok) {
+          let detail = 'Profile not available'
+          try {
+            if (isJsonResponse(res)) {
+              const body = await res.json()
+              detail = body?.detail || body?.message || detail
+            } else {
+              const text = await res.text()
+              detail = text || detail
+            }
+          } catch {
+            // fallback detail hi rahega
+          }
+          throw new Error(detail)
+        }
+
+        const data = await parseJsonResponse(res)
+
+        if (!isMounted) return
+
         if (data?.accessToken) {
           localStorage.setItem('token', data.accessToken)
         }
 
-        const payload: ProfilePayload = {
-          name: data?.name ?? '',
-          username: data?.username ?? '',
-          email: data?.email ?? '',
-          phone: data?.phone ?? '',
-          location: data?.location ?? '',
-          bio: data?.bio ?? '',
-          profileImage: data?.profileImage ?? '',
-        }
+        const payload = normalizeProfileData(data)
 
         setProfile(payload)
         setFormData(payload)
         setAvatarPreview(payload.profileImage || DEFAULT_AVATAR)
 
-        if (token) {
-          fetch(`${apiBaseUrl}/api/v1/coins/balance`, {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          })
-            .then((res) => {
-              if (res.status === 401) {
-                handleSessionExpired('Session expired. Please login again.')
-                return null
-              }
-              if (!res.ok || !isJsonResponse(res)) {
-                if (res.status === 404) {
-                  setCoins(null)
-                }
-                return null
-              }
-              return res.json()
+        const latestToken =
+          data?.accessToken ||
+          getStoredAuth().token
+
+        if (latestToken) {
+          try {
+            const coinRes = await fetch(`${apiBaseUrl}/api/v1/coins/balance`, {
+              headers: {
+                Authorization: `Bearer ${latestToken}`,
+              },
             })
-            .then((coinData) => {
-              if (coinData) {
-                setCoins({
-                  balance: coinData.balance ?? 0,
-                  streak_count: coinData.streak_count ?? 0,
-                  badge_label: coinData.badge_label,
-                })
+
+            if (!isMounted) return
+
+            if (coinRes.status === 401) {
+              handleSessionExpired('Session expired. Please login again.')
+              return
+            }
+
+            if (!coinRes.ok) {
+              if (coinRes.status === 404) {
+                setCoins(null)
               }
+              return
+            }
+
+            if (!isJsonResponse(coinRes)) {
+              setCoins(null)
+              return
+            }
+
+            const coinData = await coinRes.json()
+
+            if (!isMounted) return
+
+            setCoins({
+              balance: coinData?.balance ?? 0,
+              streak_count: coinData?.streak_count ?? 0,
+              badge_label: coinData?.badge_label ?? null,
             })
-            .catch(() => null)
+          } catch {
+            if (isMounted) {
+              setCoins(null)
+            }
+          }
+
+          if (isMounted) {
+            await fetchSellerProfile(latestToken)
+          }
         }
-      })
-      .catch(() => {
-        setError('Profile not available')
-      })
-  }, [])
+      } catch (err: any) {
+        if (!isMounted) return
+        setError(err?.message || 'Profile not available')
+      }
+    }
+
+    fetchProfile()
+
+    return () => {
+      isMounted = false
+    }
+  }, [apiBaseUrl, buildAuthHeaders, fetchSellerProfile, getStoredAuth, handleSessionExpired])
 
   useEffect(() => {
     return () => {
@@ -198,9 +354,7 @@ export default function ProfilePage() {
     event: React.ChangeEvent<HTMLInputElement>
   ) => {
     const file = event.target.files?.[0]
-    if (!file) {
-      return
-    }
+    if (!file) return
 
     if (!file.type.startsWith('image/')) {
       toast.error('Only image files are allowed')
@@ -212,42 +366,71 @@ export default function ProfilePage() {
       return
     }
 
+    const previousPreview = avatarPreview
     const previewUrl = URL.createObjectURL(file)
     setAvatarPreview(previewUrl)
 
-    const uploadUrl = process.env.NEXT_PUBLIC_CLOUDINARY_URL
-    const uploadPreset = process.env.NEXT_PUBLIC_UPLOAD_PRESET
-
-    if (!uploadUrl || !uploadPreset) {
-      toast.error('Cloudinary configuration missing')
+    const headers = buildAuthHeaders()
+    if (!headers) {
+      setAvatarPreview(previousPreview || DEFAULT_AVATAR)
+      handleSessionExpired('Session expired. Please login again.')
       return
     }
 
     const form = new FormData()
     form.append('file', file)
-    form.append('upload_preset', uploadPreset)
 
     try {
       setIsUploading(true)
-      const response = await fetch(uploadUrl, {
+
+      const response = await fetch('/api/profile', {
         method: 'POST',
+        headers,
         body: form,
       })
 
+      if (response.status === 401) {
+        setAvatarPreview(previousPreview || DEFAULT_AVATAR)
+        handleSessionExpired('Session expired. Please login again.')
+        return
+      }
+
       if (!response.ok) {
-        throw new Error('Upload failed')
+        const detail = isJsonResponse(response)
+          ? (await response.json())?.detail || 'Upload failed'
+          : (await response.text()) || 'Upload failed'
+        throw new Error(detail)
       }
 
       const data = await response.json()
+      const secureUrl = data?.secure_url || data?.url
+
+      if (!secureUrl) {
+        throw new Error('Image URL not returned')
+      }
+
       setFormData((prev) => ({
         ...prev,
-        profileImage: data?.secure_url ?? prev.profileImage,
+        profileImage: secureUrl,
       }))
-      toast.success('Image uploaded')
-    } catch (error) {
-      toast.error('Upload failed')
+      setProfile((prev) =>
+        prev
+          ? {
+              ...prev,
+              profileImage: secureUrl,
+            }
+          : prev
+      )
+      setAvatarPreview(secureUrl)
+      toast.success('Avatar updated successfully')
+    } catch (error: any) {
+      setAvatarPreview(previousPreview || DEFAULT_AVATAR)
+      toast.error(getReadableUploadError(error?.message || ''))
     } finally {
       setIsUploading(false)
+      if (previewUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(previewUrl)
+      }
     }
   }
 
@@ -259,23 +442,21 @@ export default function ProfilePage() {
       return
     }
 
-    const token = localStorage.getItem('token')?.replace(/^Bearer\s+/i, '').trim()
-    const phoneNumber = localStorage.getItem('phone_number')?.trim()
-    const otp = localStorage.getItem('otp')?.trim()
-    if (!token) {
+    const headers = buildAuthHeaders()
+
+    if (!headers) {
       handleSessionExpired('Session expired. Please login again.')
       return
     }
 
     try {
       setIsSaving(true)
+
       const response = await fetch('/api/profile', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-          ...(phoneNumber ? { 'x-phone-number': phoneNumber } : {}),
-          ...(otp ? { 'x-otp': otp } : {}),
+          ...headers,
         },
         body: JSON.stringify({
           name: formData.name,
@@ -304,8 +485,8 @@ export default function ProfilePage() {
             const text = await response.text()
             detail = text || detail
           }
-        } catch (parseError) {
-          // keep fallback detail
+        } catch {
+          // fallback detail
         }
 
         toast.error(detail)
@@ -313,18 +494,17 @@ export default function ProfilePage() {
       }
 
       const updatedUser = await parseJsonResponse(response)
-      const updatedPayload: ProfilePayload = {
-        name: `${updatedUser.first_name ?? ''} ${updatedUser.last_name ?? ''}`.trim() || formData.name,
-        email: updatedUser.email ?? formData.email,
-        phone: updatedUser.phone_number ?? formData.phone,
-        username: updatedUser.username ?? formData.username,
-        bio: updatedUser.bio ?? formData.bio,
-        location: updatedUser.location ?? formData.location,
-        profileImage: updatedUser.profile_image ?? formData.profileImage,
-      }
+      const updatedPayload = normalizeProfileData(updatedUser)
+
       setProfile(updatedPayload)
       setFormData(updatedPayload)
       setAvatarPreview(updatedPayload.profileImage || DEFAULT_AVATAR)
+      setError(null)
+
+      if (updatedUser?.accessToken) {
+        localStorage.setItem('token', updatedUser.accessToken)
+      }
+
       toast.success('Profile updated')
     } catch (error) {
       console.error('Profile update error:', error)
@@ -334,11 +514,28 @@ export default function ProfilePage() {
     }
   }
 
+  const profileCompletion = [
+    formData.name,
+    formData.username,
+    formData.email,
+    formData.phone,
+    formData.location,
+    formData.bio,
+  ].filter((value) => value?.trim()).length
+
+  const completionPercent = Math.round((profileCompletion / 6) * 100)
+
   if (error) {
     return (
-      <div className={`min-h-screen flex items-center justify-center ${themeClasses}`}>
-        <div className="rounded-2xl bg-white/90 p-8 shadow-xl text-slate-900">
-          {error}
+      <div className="app-shell">
+        <div className="app-container">
+          <section className="ds-card text-center">
+            <h1 className="text-xl font-semibold text-slate-900">Unable to load profile</h1>
+            <p className="mt-2 text-sm text-slate-600">{error}</p>
+            <button type="button" onClick={() => router.refresh()} className="ds-btn-primary mt-4">
+              Retry
+            </button>
+          </section>
         </div>
       </div>
     )
@@ -346,159 +543,196 @@ export default function ProfilePage() {
 
   if (!profile) {
     return (
-      <div className={`min-h-screen flex items-center justify-center ${themeClasses}`}>
-        Loading...
+      <div className="app-shell">
+        <div className="app-container space-y-4">
+          <div className="ds-card h-40 animate-pulse bg-slate-100" />
+          <div className="ds-card h-80 animate-pulse bg-slate-100" />
+        </div>
       </div>
     )
   }
 
   return (
-    <div className={`min-h-screen ${themeClasses} flex items-center justify-center px-4 py-12`}>
-      <div className="w-full max-w-3xl rounded-3xl border border-white/10 bg-white/95 p-8 shadow-2xl backdrop-blur sm:p-10 dark:border-slate-800/60 dark:bg-slate-900/80">
-        <div className="flex flex-col gap-6 border-b border-slate-200 pb-6 sm:flex-row sm:items-center sm:justify-between dark:border-slate-700">
-          <div>
-            <h1 className="text-2xl font-semibold">Edit Profile</h1>
-            <p className="text-sm text-slate-500 dark:text-slate-300">
-              Keep your profile fresh and Instagram-ready.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={() => setIsDarkMode((prev) => !prev)}
-            className="rounded-full border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 transition hover:border-slate-300 dark:border-slate-700 dark:text-slate-200 dark:hover:border-slate-500"
-          >
-            {isDarkMode ? 'Light mode' : 'Dark mode'}
-          </button>
-        </div>
+    <div className="app-shell">
+      <div className="app-container space-y-4">
+        <section className="ds-hero-card">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-4">
+              <div className="relative">
+                <img
+                  src={avatarPreview || DEFAULT_AVATAR}
+                  alt="Profile"
+                  className="h-20 w-20 rounded-full border border-slate-200 object-cover shadow-sm"
+                />
+                <label
+                  htmlFor="profileImage"
+                  className="absolute bottom-0 right-0 flex h-7 w-7 cursor-pointer items-center justify-center rounded-full bg-slate-900 text-xs text-white shadow"
+                >
+                  ✎
+                </label>
+                <input
+                  id="profileImage"
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  disabled={isUploading}
+                  onChange={handleImageChange}
+                />
+              </div>
 
-        <form onSubmit={handleSubmit} className="mt-8 space-y-6">
-          {coins && (
-            <div className="rounded-2xl border border-purple-200 bg-purple-50 p-4 text-sm text-purple-700">
-              <div className="flex flex-wrap gap-4">
-                <div>
-                  <p className="text-xs uppercase">Coin Balance</p>
-                  <p className="text-lg font-semibold">{coins.balance}</p>
-                </div>
-                <div>
-                  <p className="text-xs uppercase">Streak</p>
-                  <p className="text-lg font-semibold">{coins.streak_count} days</p>
-                </div>
-                <div>
-                  <p className="text-xs uppercase">Badge</p>
-                  <p className="text-lg font-semibold">{coins.badge_label ?? 'Bronze'}</p>
-                </div>
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Account Center</p>
+                <h1 className="mt-1 text-2xl font-semibold text-slate-900">{formData.name || 'Your Profile'}</h1>
+                <p className="text-sm text-slate-600">@{formData.username || 'username'} • {formData.email}</p>
+                {formData.bio && <p className="mt-2 line-clamp-2 text-sm text-slate-600">{formData.bio}</p>}
+                {isUploading && <p className="mt-1 text-xs text-slate-500">Uploading image...</p>}
               </div>
             </div>
-          )}
-          <div className="flex flex-col items-center gap-6 sm:flex-row sm:items-start">
-            <div className="relative">
-              <img
-                src={avatarPreview || DEFAULT_AVATAR}
-                alt="Profile"
-                className="h-24 w-24 rounded-full object-cover shadow"
-              />
-              <label
-                htmlFor="profileImage"
-                className="absolute bottom-0 right-0 flex h-8 w-8 cursor-pointer items-center justify-center rounded-full bg-slate-900 text-white shadow-lg"
-              >
-                ✎
-              </label>
-              <input
-                id="profileImage"
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={handleImageChange}
-              />
-            </div>
-            <div>
-              <h2 className="text-lg font-semibold">{formData.name}</h2>
-              <p className="text-sm text-slate-500 dark:text-slate-300">{formData.email}</p>
-              {isUploading && (
-                <p className="mt-2 text-xs text-slate-500 dark:text-slate-300">Uploading image...</p>
-              )}
-            </div>
-          </div>
 
-          <div className="grid gap-6 sm:grid-cols-2">
-            <div>
-              <label className="text-sm font-medium">Name</label>
-              <input
-                name="name"
-                value={formData.name}
-                onChange={handleChange}
-                placeholder="Your name"
-                className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm focus:border-slate-400 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
-              />
-            </div>
-            <div>
-              <label className="text-sm font-medium">Username</label>
-              <input
-                name="username"
-                value={formData.username}
-                onChange={handleChange}
-                placeholder="@username"
-                className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm focus:border-slate-400 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
-              />
-            </div>
-            <div>
-              <label className="text-sm font-medium">Email</label>
-              <input
-                name="email"
-                type="email"
-                value={formData.email}
-                onChange={handleChange}
-                placeholder="Email address"
-                className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm focus:border-slate-400 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
-              />
-            </div>
-            <div>
-              <label className="text-sm font-medium">Phone</label>
-              <input
-                name="phone"
-                value={formData.phone}
-                onChange={handleChange}
-                placeholder="Phone number"
-                className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm focus:border-slate-400 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
-              />
-            </div>
-            <div>
-              <label className="text-sm font-medium">Location</label>
-              <input
-                name="location"
-                value={formData.location}
-                onChange={handleChange}
-                placeholder="City, Country"
-                className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm focus:border-slate-400 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="text-sm font-medium">Bio</label>
-            <textarea
-              name="bio"
-              value={formData.bio}
-              onChange={handleChange}
-              rows={4}
-              placeholder="Tell us about yourself"
-              className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm focus:border-slate-400 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
-            />
-          </div>
-
-          <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-xs text-slate-500 dark:text-slate-300">
-              Changes will be visible across your profile and orders.
-            </p>
             <button
-              type="submit"
-              disabled={isSaving || isUploading}
-              className="rounded-full bg-slate-900 px-6 py-3 text-sm font-semibold text-white shadow-lg transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-70 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-slate-200"
+              type="button"
+              onClick={() => router.push('/seller-dashboard')}
+              className="ds-btn-secondary"
             >
-              {isSaving ? 'Saving...' : 'Save Changes'}
+              Open Dashboard
             </button>
           </div>
-        </form>
+        </section>
+
+        <section className="ds-card">
+          <h2 className="ds-title">Profile Stats</h2>
+          <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+              <p className="text-xs text-slate-500">Completion</p>
+              <p className="mt-1 text-lg font-semibold text-slate-900">{completionPercent}%</p>
+            </div>
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+              <p className="text-xs text-slate-500">Coins</p>
+              <p className="mt-1 text-lg font-semibold text-slate-900">{coins?.balance ?? 0}</p>
+            </div>
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+              <p className="text-xs text-slate-500">Streak</p>
+              <p className="mt-1 text-lg font-semibold text-slate-900">{coins?.streak_count ?? 0} days</p>
+            </div>
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+              <p className="text-xs text-slate-500">Badge</p>
+              <p className="mt-1 text-lg font-semibold text-slate-900">{coins?.badge_label ?? 'Bronze'}</p>
+            </div>
+          </div>
+        </section>
+
+        <div className="grid gap-4 lg:grid-cols-[1.35fr_1fr]">
+          <form onSubmit={handleSubmit} className="ds-card space-y-5">
+            <div>
+              <h2 className="ds-title">Edit Profile</h2>
+              <p className="ds-subtitle">Keep your details updated for orders, bookings, and store activity.</p>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <label className="ds-label">Name</label>
+                <input name="name" value={formData.name} onChange={handleChange} placeholder="Your name" className="ds-input" />
+              </div>
+              <div>
+                <label className="ds-label">Username</label>
+                <input name="username" value={formData.username} onChange={handleChange} placeholder="@username" className="ds-input" />
+              </div>
+              <div>
+                <label className="ds-label">Email</label>
+                <input name="email" type="email" value={formData.email} onChange={handleChange} placeholder="Email address" className="ds-input" />
+              </div>
+              <div>
+                <label className="ds-label">Phone</label>
+                <input name="phone" value={formData.phone} onChange={handleChange} placeholder="Phone number" className="ds-input" />
+              </div>
+            </div>
+
+            <div>
+              <label className="ds-label">Location</label>
+              <input name="location" value={formData.location} onChange={handleChange} placeholder="City, Country" className="ds-input" />
+            </div>
+
+            <div>
+              <label className="ds-label">Bio</label>
+              <textarea
+                name="bio"
+                value={formData.bio}
+                onChange={handleChange}
+                rows={4}
+                placeholder="Tell us about yourself"
+                className="ds-input min-h-28 resize-y"
+              />
+            </div>
+
+            <div className="flex flex-col gap-3 border-t border-slate-200 pt-4 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-xs text-slate-500">Changes are reflected across your profile and purchase history.</p>
+              <button type="submit" disabled={isSaving || isUploading} className="ds-btn-primary disabled:cursor-not-allowed disabled:opacity-60">
+                {isSaving ? 'Saving...' : 'Save Changes'}
+              </button>
+            </div>
+          </form>
+
+          <aside className="space-y-4">
+            <section className="ds-card">
+              <h2 className="ds-title">Seller Status</h2>
+              <p className="mt-2 text-sm text-slate-600">
+                {sellerLoading
+                  ? 'Checking seller status...'
+                  : sellerProfile
+                    ? 'Your seller account is active.'
+                    : 'Upgrade your account to start selling.'}
+              </p>
+
+              {sellerProfile && (
+                <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+                  <p className="font-semibold text-slate-900">{sellerProfile.business_name}</p>
+                  <p className="mt-1 text-xs">
+                    Status: {sellerProfile.approved ? 'Approved Seller' : 'Pending approval'}
+                  </p>
+                </div>
+              )}
+
+              <div className="mt-4">
+                {!sellerProfile ? (
+                  <button
+                    type="button"
+                    onClick={handleBecomeSeller}
+                    disabled={becomingSeller || sellerLoading}
+                    className="ds-btn-primary w-full disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {becomingSeller ? 'Becoming Seller...' : 'Become Seller'}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => router.push('/seller-dashboard')}
+                    className="ds-btn-secondary w-full"
+                  >
+                    Go to Seller Dashboard
+                  </button>
+                )}
+              </div>
+            </section>
+
+            <section className="ds-card">
+              <h2 className="ds-title">Quick Actions</h2>
+              <div className="mt-3 grid grid-cols-1 gap-2">
+                <button type="button" onClick={() => router.push('/my-orders')} className="ds-btn-secondary w-full">
+                  View Orders
+                </button>
+                <button type="button" onClick={() => router.push('/my-bookings')} className="ds-btn-secondary w-full">
+                  View Bookings
+                </button>
+                <button type="button" onClick={() => router.push('/wishlist')} className="ds-btn-secondary w-full">
+                  Open Wishlist
+                </button>
+                <button type="button" onClick={() => router.push('/search')} className="ds-btn-primary w-full">
+                  Explore Marketplace
+                </button>
+              </div>
+            </section>
+          </aside>
+        </div>
       </div>
     </div>
   )

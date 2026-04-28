@@ -1,14 +1,15 @@
 'use client';
 
 import React from 'react';
-import ListingCard, { Listing } from '@/app/components/ListingCard';
+import ListingCard, { Listing } from '../components/ListingCard';
 import { useRouter } from 'next/navigation';
-import { useI18n } from '@/app/i18n/context';
+import { useI18n } from '../i18n/context';
+import { API_BASE_URL } from '../../lib/auth';
 
 interface WishlistItem {
   id: number;
   user_id: number;
-  listing_id: number;
+  product_id: number;
   created_at: string;
 }
 
@@ -19,7 +20,7 @@ interface PageProps {
 const WishlistPage: React.FC<PageProps> = () => {
   const { t } = useI18n();
   const router = useRouter();
-  const API = process.env.NEXT_PUBLIC_API_BASE_URL;
+  const API = API_BASE_URL;
   const [wishlist, setWishlist] = React.useState<WishlistItem[]>([]);
   const [listings, setListings] = React.useState<Listing[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
@@ -52,9 +53,19 @@ const WishlistPage: React.FC<PageProps> = () => {
 
         const listingDetails: Listing[] = await Promise.all(
           data.map(async item => {
-            const listingResponse = await fetch(`${API}/api/v1/listings/${item.listing_id}`);
-            if (listingResponse.ok) {
-              return await listingResponse.json();
+            const productResponse = await fetch(`${API}/api/v1/products/${item.product_id}`);
+            if (productResponse.ok) {
+              const product = await productResponse.json();
+              return {
+                id: product.id,
+                title: product.name,
+                description: product.description,
+                price: product.price,
+                type: 'product',
+                stock: product.stock,
+                seller_id: product.seller_id,
+                image_url: product.image_url,
+              } as Listing;
             }
             return null;
           })
@@ -72,7 +83,7 @@ const WishlistPage: React.FC<PageProps> = () => {
   }, [router]);
 
   // Handle remove from wishlist
-  const handleRemoveFromWishlist = async (listingId: number) => {
+  const handleRemoveFromWishlist = async (productId: number) => {
     try {
       const token = localStorage.getItem('token');
       if (!token) {
@@ -80,7 +91,7 @@ const WishlistPage: React.FC<PageProps> = () => {
         return;
       }
 
-      const response = await fetch(`${API}/api/v1/wishlists/${listingId}`, {
+      const response = await fetch(`${API}/api/v1/wishlists/${productId}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`

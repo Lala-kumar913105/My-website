@@ -3,7 +3,7 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 from app import crud, schemas, models
 from app.db.session import get_db
-from app.core.security import get_current_user_optional, get_current_active_seller, get_current_active_admin
+from app.core.security import get_current_user_optional, get_current_user, get_current_active_seller, get_current_active_admin
 from app.services.translation_service import translate_text
 from app.services.currency_service import convert_price
 import os
@@ -167,13 +167,11 @@ def create_product(
     latitude: Optional[float] = Form(None),
     longitude: Optional[float] = Form(None),
     image: UploadFile = File(None),
-    current_user: models.User = Depends(get_current_active_seller),
+    current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Create a new product (requires seller role)"""
-    seller = crud.get_seller_by_user_id(db, user_id=current_user.id)
-    if not seller:
-        raise HTTPException(status_code=404, detail="Seller not found for this user")
+    """Create a new product (auto-creates seller profile if needed)."""
+    seller = crud.get_or_create_seller(db, user=current_user)
     
     # Create product instance
     product_data = schemas.ProductCreate(

@@ -1,283 +1,318 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import { API_BASE_URL } from "../../lib/auth";
+import { FALLBACK_PRODUCT_IMAGE, resolveProductImageSrc } from "../../lib/image";
+
+type OrderStatus = "pending" | "confirmed" | "preparing" | "out_for_delivery" | "delivered" | "cancelled";
+
+interface OrderProduct {
+  id: number;
+  name: string;
+  image_url?: string | null;
+  price: number;
+}
+
+interface OrderSeller {
+  id: number;
+  business_name: string;
+}
 
 interface OrderItem {
   id: number;
   product_id: number;
   quantity: number;
   price_at_purchase: number;
-  listing_id?: number;
-  listing_type?: string;
+  product?: OrderProduct;
+  seller?: OrderSeller | null;
 }
 
 interface Order {
   id: number;
-  user_id: number;
   total_amount: number;
-  status: string;
+  final_amount: number;
+  status: OrderStatus;
   created_at: string;
+  shipping_address?: string | null;
   order_items: OrderItem[];
 }
 
-interface TrackingInfo {
-  status: string;
-  estimated_delivery_minutes?: number;
-  updated_at?: string;
-}
+const STATUS_STEPS: OrderStatus[] = ["pending", "confirmed", "preparing", "out_for_delivery", "delivered"];
 
-interface Booking {
-  id: number;
-  service_id: number;
-  listing_id?: number;
-  booking_time: string;
-  total_amount: number;
-  status: string;
-  notes?: string | null;
-}
+const badgeStyle: Record<string, string> = {
+  pending: "bg-amber-50 text-amber-700 border-amber-200",
+  confirmed: "bg-blue-50 text-blue-700 border-blue-200",
+  preparing: "bg-indigo-50 text-indigo-700 border-indigo-200",
+  out_for_delivery: "bg-violet-50 text-violet-700 border-violet-200",
+  delivered: "bg-emerald-50 text-emerald-700 border-emerald-200",
+  cancelled: "bg-rose-50 text-rose-700 border-rose-200",
+};
 
-const STATUS_STEPS = [
-  "pending",
-  "confirmed",
-  "preparing",
-  "out_for_delivery",
-  "delivered",
-];
+const statusLabel: Record<string, string> = {
+  pending: "Pending",
+  confirmed: "Confirmed",
+  preparing: "Preparing",
+  out_for_delivery: "Out for Delivery",
+  delivered: "Delivered",
+  cancelled: "Cancelled",
+};
 
-const formatStatus = (status: string) => status.replace(/_/g, " ");
+const humanize = (value: string) => value.replace(/_/g, " ");
 
 export default function MyOrdersPage() {
   const router = useRouter();
-  const API = process.env.NEXT_PUBLIC_API_BASE_URL;
+  const searchParams = useSearchParams();
+  const API = API_BASE_URL;
+
   const [orders, setOrders] = useState<Order[]>([]);
-  const [bookings, setBookings] = useState<Booking[]>([]);
-  const [tracking, setTracking] = useState<Record<number, TrackingInfo>>({});
-  const [notifications, setNotifications] = useState<string[]>([]);
+  const [userId, setUserId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [expandedOrderId, setExpandedOrderId] = useState<number | null>(null);
+  const [reorderBusyId, setReorderBusyId] = useState<number | null>(null);
 
   useEffect(() => {
-    const fetchOrders = async () => {
+    const loadOrders = async () => {
+      setLoading(true);
+      setError(null);
+
       try {
         const token = localStorage.getItem("token");
         if (!token) {
-          router.push("/login");
+          router.push("/login?next=%2Fmy-orders");
           return;
         }
 
-        if (!API) {
-          alert("API URL is missing");
-          return;
-        }
-
-        const profileResponse = await fetch(`${API}/api/v1/users/me`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+        const meResponse = await fetch(`${API}/api/v1/users/me`, {
+          headers: { Authorization: `Bearer ${token}` },
         });
-
-        if (!profileResponse.ok) {
-          if (profileResponse.status === 401) {
-            localStorage.removeItem("token");
-            router.push("/login");
-          }
+        if (!meResponse.ok) {
+          localStorage.removeItem("token");
+          router.push("/login?next=%2Fmy-orders");
           return;
         }
 
-        const profile = await profileResponse.json();
-        const [ordersResponse, bookingsResponse] = await Promise.all([
-          fetch(`${API}/api/v1/orders/user/${profile.id}`, {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          }),
-          fetch(`${API}/api/v1/bookings/user/${profile.id}`, {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          }),
-        ]);
+        const me = await meResponse.json();
+        setUserId(me.id);
 
-        if (!ordersResponse.ok || !bookingsResponse.ok) {
-          if (ordersResponse.status === 401 || bookingsResponse.status === 401) {
+        const ordersResponse = await fetch(`${API}/api/v1/orders/user/${me.id}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!ordersResponse.ok) {
+          if (ordersResponse.status === 401) {
             localStorage.removeItem("token");
-            router.push("/login");
+            router.push("/login?next=%2Fmy-orders");
+            return;
           }
-          return;
+          throw new Error("Unable to load your orders");
         }
 
-        const ordersData: Order[] = await ordersResponse.json();
-        const bookingsData: Booking[] = await bookingsResponse.json();
-        setOrders(ordersData);
-        setBookings(bookingsData);
-
-        if (ordersData.length > 0) {
-          const trackingEntries = await Promise.all(
-            ordersData.map(async (order) => {
-              try {
-                const trackResponse = await fetch(`${API}/api/v1/order/track/${order.id}`, {
-                  headers: {
-                    Authorization: `Bearer ${token}`,
-                  },
-                });
-                if (trackResponse.ok) {
-                  const trackData = await trackResponse.json();
-                  return [order.id, trackData] as [number, TrackingInfo];
-                }
-              } catch (error) {
-                console.error("Tracking fetch failed", error);
-              }
-              return [order.id, { status: order.status }] as [number, TrackingInfo];
-            })
-          );
-          const trackingMap = Object.fromEntries(trackingEntries);
-          setTracking(trackingMap);
-          setNotifications(
-            ordersData
-              .filter((order) => trackingMap[order.id]?.status && trackingMap[order.id].status !== order.status)
-              .map((order) => `Order #${order.id} status updated to ${formatStatus(trackingMap[order.id].status)}`)
-          );
-        }
-      } catch (error) {
-        console.error("Error fetching orders:", error);
+        const data: Order[] = await ordersResponse.json();
+        setOrders(Array.isArray(data) ? data : []);
+      } catch (loadError) {
+        setError(loadError instanceof Error ? loadError.message : "Unable to load your orders");
       } finally {
         setLoading(false);
       }
     };
 
-    fetchOrders();
+    loadOrders();
   }, [API, router]);
 
-  const orderCards = useMemo(() =>
-    orders.map((order) => {
-      const trackInfo = tracking[order.id];
-      const status = trackInfo?.status || order.status;
-      const currentIndex = Math.max(STATUS_STEPS.indexOf(status), 0);
-      const displayStatus = formatStatus(status);
-      const progressPercent = ((currentIndex + 1) / STATUS_STEPS.length) * 100;
+  const reorder = async (order: Order) => {
+    if (!userId) return;
+    const token = localStorage.getItem("token");
+    if (!token) {
+      router.push("/login?next=%2Fmy-orders");
+      return;
+    }
 
-      return (
-        <div key={order.id} className="bg-white rounded-lg shadow-md p-6">
-          <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
-            <div>
-              <h3 className="text-lg font-semibold">Order #{order.id}</h3>
-              <p className="text-sm text-gray-500">
-                {new Date(order.created_at).toLocaleString()}
-              </p>
-            </div>
-            <div className="text-sm text-gray-600">Status: {displayStatus}</div>
-          </div>
+    setReorderBusyId(order.id);
+    try {
+      for (const item of order.order_items) {
+        await fetch(`${API}/api/v1/carts/add`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            user_id: userId,
+            product_id: item.product_id,
+            quantity: item.quantity,
+          }),
+        });
+      }
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new Event("cart:changed"));
+      }
+      router.push("/cart");
+    } finally {
+      setReorderBusyId(null);
+    }
+  };
 
-          <div className="mb-4">
-            <div className="flex items-center justify-between text-xs text-gray-500">
-              {STATUS_STEPS.map((step, index) => (
-                <span key={step} className={index <= currentIndex ? "text-purple-600" : ""}>
-                  {formatStatus(step)}
-                </span>
-              ))}
-            </div>
-            <div className="mt-2 h-2 rounded-full bg-gray-100">
-              <div className="h-2 rounded-full bg-purple-600" style={{ width: `${progressPercent}%` }} />
-            </div>
-            {trackInfo?.estimated_delivery_minutes && (
-              <p className="mt-2 text-xs text-gray-500">
-                ETA: {trackInfo.estimated_delivery_minutes} minutes (last update {trackInfo.updated_at ? new Date(trackInfo.updated_at).toLocaleTimeString() : "recently"})
-              </p>
-            )}
-          </div>
-
-          <div className="space-y-2">
-            {order.order_items?.map((item) => (
-              <div key={item.id} className="flex justify-between text-sm text-gray-700">
-                <span>Listing #{item.listing_id ?? item.product_id} × {item.quantity}</span>
-                <span>₹{(item.price_at_purchase * item.quantity).toFixed(2)}</span>
-              </div>
-            ))}
-          </div>
-
-          <div className="mt-4 flex justify-end text-lg font-semibold">
-            Total: ₹{order.total_amount.toFixed(2)}
-          </div>
-        </div>
-      );
-    }),
-    [orders, tracking]
-  );
+  const orderCount = useMemo(() => orders.length, [orders]);
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center min-h-screen">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-500"></div>
+      <div className="app-shell">
+        <div className="app-container space-y-4">
+          <div className="ds-card h-24 animate-pulse bg-slate-200" />
+          <div className="ds-card h-28 animate-pulse bg-slate-200" />
+          <div className="ds-card h-28 animate-pulse bg-slate-200" />
+        </div>
       </div>
     );
   }
 
-  if (orders.length === 0 && bookings.length === 0) {
+  if (error) {
     return (
-      <div className="container mx-auto p-6">
-        <h1 className="text-3xl font-bold mb-6">My Orders</h1>
-        <div className="bg-white rounded-lg shadow-md p-6 text-center">
-          <p className="text-gray-600">You have no orders yet.</p>
+      <div className="app-shell">
+        <div className="app-container">
+          <section className="ds-card text-center">
+            <h1 className="text-xl font-semibold text-slate-900">Unable to load orders</h1>
+            <p className="mt-2 text-sm text-slate-600">{error}</p>
+            <button onClick={() => window.location.reload()} className="ds-btn-primary mt-5" type="button">
+              Retry
+            </button>
+          </section>
+        </div>
+      </div>
+    );
+  }
+
+  if (orders.length === 0) {
+    return (
+      <div className="app-shell">
+        <div className="app-container">
+          <section className="ds-card text-center">
+            <h1 className="text-2xl font-semibold text-slate-900">My Orders</h1>
+            <p className="mt-2 text-sm text-slate-600">Track your purchases and order status in one place.</p>
+            <button onClick={() => router.push("/search?type=product")} className="ds-btn-primary mt-5" type="button">
+              Continue Shopping
+            </button>
+          </section>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="container mx-auto p-6">
-        <h1 className="text-3xl font-bold mb-6">My Orders & Bookings</h1>
-        <div className="mb-6 flex flex-wrap gap-3">
-          <button
-            onClick={() => router.push("/my-bookings")}
-            className="rounded-full border border-purple-200 px-4 py-2 text-sm text-purple-700"
-          >
-            Manage Bookings
-          </button>
-        </div>
+    <div className="app-shell">
+      <div className="app-container space-y-5">
+        <section className="ds-hero-card">
+          <h1 className="text-2xl font-semibold text-slate-900 sm:text-3xl">My Orders</h1>
+          <p className="mt-2 text-sm text-slate-600">Track your purchases and order status in one place.</p>
+          <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-500">
+            <span className="rounded-full bg-slate-100 px-3 py-1">Checkout</span>
+            <span className="rounded-full bg-slate-100 px-3 py-1">Order Confirmed</span>
+            <span className="rounded-full bg-slate-100 px-3 py-1">My Orders</span>
+          </div>
+          <p className="mt-2 text-xs text-slate-500">{orderCount} order{orderCount > 1 ? "s" : ""} in your history</p>
+        </section>
 
-      {notifications.length > 0 && (
-        <div className="mb-6 space-y-2">
-          {notifications.map((note, index) => (
-            <div key={`${note}-${index}`} className="rounded-lg bg-blue-50 px-4 py-3 text-sm text-blue-700">
-              {note}
-            </div>
-          ))}
-        </div>
-      )}
-
-      <div className="space-y-4">
-        {orders.length > 0 && (
-          <section className="space-y-4">
-            <h2 className="text-xl font-semibold">Orders</h2>
-            {orderCards}
-          </section>
+        {searchParams.get("from") === "checkout" && (
+          <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+            Order placed successfully. You can track all updates here.
+          </p>
         )}
 
-        {bookings.length > 0 && (
-          <section className="space-y-4">
-            <h2 className="text-xl font-semibold">Bookings</h2>
-            {bookings.map((booking) => (
-              <div key={booking.id} className="bg-white rounded-lg shadow-md p-6">
-                <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
-                  <div>
-                    <h3 className="text-lg font-semibold">Booking #{booking.id}</h3>
-                    <p className="text-sm text-gray-500">
-                      {new Date(booking.booking_time).toLocaleString()}
+        <section className="space-y-3">
+          {orders.map((order) => {
+            const firstItem = order.order_items[0];
+            const firstProduct = firstItem?.product;
+            const seller = firstItem?.seller;
+            const statusIndex = Math.max(STATUS_STEPS.indexOf(order.status), 0);
+            const progress = ((statusIndex + 1) / STATUS_STEPS.length) * 100;
+            const expanded = expandedOrderId === order.id;
+
+            return (
+              <article key={order.id} className="ds-card space-y-3">
+                <div className="flex items-start gap-3">
+                  <img
+                    src={resolveProductImageSrc(firstProduct?.image_url, API)}
+                    alt={firstProduct?.name || "Order item"}
+                    className="h-16 w-16 rounded-xl object-cover"
+                    onError={(event) => {
+                      event.currentTarget.src = FALLBACK_PRODUCT_IMAGE;
+                    }}
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <h2 className="line-clamp-1 text-base font-semibold text-slate-900">
+                        {firstProduct?.name || `Order #${order.id}`}
+                      </h2>
+                      <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${badgeStyle[order.status] || "bg-slate-50 text-slate-700 border-slate-200"}`}>
+                        {statusLabel[order.status] || humanize(order.status)}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-500">Order #{order.id} • {new Date(order.created_at).toLocaleString()}</p>
+                    <p className="mt-1 text-sm text-slate-600">
+                      {order.order_items.length} item{order.order_items.length > 1 ? "s" : ""} • ₹{(order.final_amount ?? order.total_amount).toFixed(2)}
                     </p>
+                    {seller?.business_name && <p className="text-xs text-slate-500">Seller: {seller.business_name}</p>}
                   </div>
-                  <div className="text-sm text-gray-600">Status: {booking.status}</div>
                 </div>
-                <div className="text-sm text-gray-600">Service Listing #{booking.listing_id ?? booking.service_id}</div>
-                {booking.notes && (
-                  <p className="mt-2 text-sm text-gray-500">Notes: {booking.notes}</p>
+
+                <div>
+                  <div className="h-2 rounded-full bg-slate-100">
+                    <div className="h-2 rounded-full bg-slate-900" style={{ width: `${progress}%` }} />
+                  </div>
+                  <div className="mt-2 flex items-center justify-between text-[11px] text-slate-500">
+                    {STATUS_STEPS.map((step, index) => (
+                      <span key={`${order.id}-${step}`} className={index <= statusIndex ? "text-slate-900" : ""}>
+                        {humanize(step)}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+
+                {expanded && (
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">
+                    <div className="space-y-1">
+                      {order.order_items.map((item) => (
+                        <div key={item.id} className="flex items-center justify-between">
+                          <span>{item.product?.name || `Product #${item.product_id}`} × {item.quantity}</span>
+                          <span>₹{(item.price_at_purchase * item.quantity).toFixed(2)}</span>
+                        </div>
+                      ))}
+                    </div>
+                    {order.shipping_address && <p className="mt-2 text-xs text-slate-500">Shipping: {order.shipping_address}</p>}
+                  </div>
                 )}
-                <div className="mt-4 flex justify-end text-lg font-semibold">
-                  Total: ₹{booking.total_amount.toFixed(2)}
+
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setExpandedOrderId(expanded ? null : order.id)}
+                    className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                  >
+                    {expanded ? "Hide Details" : "View Details"}
+                  </button>
+                  {seller?.id ? (
+                    <button
+                      type="button"
+                      onClick={() => router.push(`/store/${seller.id}`)}
+                      className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                    >
+                      Contact Seller
+                    </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    onClick={() => reorder(order)}
+                    disabled={reorderBusyId === order.id}
+                    className="rounded-xl bg-slate-900 px-3 py-2 text-xs font-semibold text-white hover:bg-slate-800 disabled:opacity-60"
+                  >
+                    {reorderBusyId === order.id ? "Reordering..." : "Reorder"}
+                  </button>
                 </div>
-              </div>
-            ))}
-          </section>
-        )}
+              </article>
+            );
+          })}
+        </section>
       </div>
     </div>
   );

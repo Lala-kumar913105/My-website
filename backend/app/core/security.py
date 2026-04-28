@@ -1,6 +1,7 @@
 import secrets
 import string
 import hashlib
+import re
 from datetime import datetime, timedelta
 from typing import Optional, List
 
@@ -42,7 +43,7 @@ def _normalize_bcrypt_password(password: str) -> str:
 
 
 def validate_password_length(password: str) -> None:
-    """Validate password rules before hashing."""
+    """Validate password strength rules before hashing."""
     if not password:
         raise ValueError("Password is required")
 
@@ -50,6 +51,23 @@ def validate_password_length(password: str) -> None:
         raise ValueError(
             f"Password must be at least {PASSWORD_MIN_LENGTH} characters long"
         )
+
+    if len(password.encode("utf-8")) > PASSWORD_MAX_LENGTH:
+        raise ValueError(
+            f"Password must be at most {PASSWORD_MAX_LENGTH} bytes long"
+        )
+
+    if not re.search(r"[a-z]", password):
+        raise ValueError("Password must include at least one lowercase letter")
+
+    if not re.search(r"[A-Z]", password):
+        raise ValueError("Password must include at least one uppercase letter")
+
+    if not re.search(r"\d", password):
+        raise ValueError("Password must include at least one number")
+
+    if not re.search(r"[^A-Za-z0-9]", password):
+        raise ValueError("Password must include at least one special character")
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
@@ -66,9 +84,9 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 
 
 def get_password_hash(password: str) -> str:
-    if len(password.encode("utf-8")) > 72:
-        password = password[:72]
-    return pwd_context.hash(password)
+    validate_password_length(password)
+    normalized_password = _normalize_bcrypt_password(password)
+    return pwd_context.hash(normalized_password)
 
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:

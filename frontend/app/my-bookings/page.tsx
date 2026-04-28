@@ -1,240 +1,380 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import { API_BASE_URL } from "../../lib/auth";
+import { FALLBACK_PRODUCT_IMAGE, resolveProductImageSrc } from "../../lib/image";
+
+type BookingStatus = "pending" | "confirmed" | "rescheduled" | "completed" | "cancelled";
 
 interface BookingItem {
   id: number;
   service_id: number;
-  listing_id?: number;
   booking_time: string;
   original_booking_time?: string | null;
-  status: string;
+  status: BookingStatus;
   notes?: string | null;
   buyer_notes?: string | null;
   seller_notes?: string | null;
   total_amount: number;
 }
 
-const STATUS_STEPS = ["pending", "confirmed", "rescheduled", "completed", "cancelled"];
+interface ServiceListing {
+  id: number;
+  source_id?: number | null;
+  title: string;
+  description?: string | null;
+  image_url?: string | null;
+  seller_id: number;
+  seller_business_name?: string | null;
+}
+
+const statusLabel: Record<string, string> = {
+  pending: "Pending",
+  confirmed: "Confirmed",
+  rescheduled: "Rescheduled",
+  completed: "Completed",
+  cancelled: "Cancelled",
+};
+
+const badgeStyle: Record<string, string> = {
+  pending: "bg-amber-50 text-amber-700 border-amber-200",
+  confirmed: "bg-blue-50 text-blue-700 border-blue-200",
+  rescheduled: "bg-indigo-50 text-indigo-700 border-indigo-200",
+  completed: "bg-emerald-50 text-emerald-700 border-emerald-200",
+  cancelled: "bg-rose-50 text-rose-700 border-rose-200",
+};
+
+const canManage = (status: BookingStatus) => ["pending", "confirmed", "rescheduled"].includes(status);
 
 export default function MyBookingsPage() {
   const router = useRouter();
-  const API = process.env.NEXT_PUBLIC_API_BASE_URL;
+  const searchParams = useSearchParams();
+  const API = API_BASE_URL;
+
   const [bookings, setBookings] = useState<BookingItem[]>([]);
+  const [serviceListings, setServiceListings] = useState<ServiceListing[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [notification, setNotification] = useState<string | null>(null);
+  const [busyBookingId, setBusyBookingId] = useState<number | null>(null);
+  const [expandedBookingId, setExpandedBookingId] = useState<number | null>(null);
+  const [rescheduleDraft, setRescheduleDraft] = useState<Record<number, string>>({});
 
-  const fetchBookings = async () => {
+  useEffect(() => {
+    const fetchData = async () => {
+      setLoading(true);
+      setError(null);
+
+      try {
+        const token = localStorage.getItem("token");
+        if (!token) {
+          router.push("/login?next=%2Fmy-bookings");
+          return;
+        }
+
+        const meResponse = await fetch(`${API}/api/v1/users/me`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        if (!meResponse.ok) {
+          localStorage.removeItem("token");
+          router.push("/login?next=%2Fmy-bookings");
+          return;
+        }
+
+        const me = await meResponse.json();
+
+        const [bookingsResponse, listingsResponse] = await Promise.all([
+          fetch(`${API}/api/v1/bookings/user/${me.id}`, {
+            headers: { Authorization: `Bearer ${token}` },
+          }),
+          fetch(`${API}/api/v1/listings?listing_type=service&limit=200`),
+        ]);
+
+        if (!bookingsResponse.ok) {
+          if (bookingsResponse.status === 401) {
+            localStorage.removeItem("token");
+            router.push("/login?next=%2Fmy-bookings");
+            return;
+          }
+          throw new Error("Unable to load bookings");
+        }
+
+        const bookingsData: BookingItem[] = await bookingsResponse.json();
+        setBookings(Array.isArray(bookingsData) ? bookingsData : []);
+
+        if (listingsResponse.ok) {
+          const listingsData: ServiceListing[] = await listingsResponse.json();
+          setServiceListings(Array.isArray(listingsData) ? listingsData : []);
+        } else {
+          setServiceListings([]);
+        }
+      } catch (fetchError) {
+        setError(fetchError instanceof Error ? fetchError.message : "Unable to load bookings");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [API, router]);
+
+  const getListing = (serviceId: number) =>
+    serviceListings.find((listing) => listing.source_id === serviceId || listing.id === serviceId) || null;
+
+  const updateStatus = async (bookingId: number, status: BookingStatus) => {
+    const token = localStorage.getItem("token");
+    if (!token) {
+      router.push("/login?next=%2Fmy-bookings");
+      return;
+    }
+
+    setBusyBookingId(bookingId);
     try {
-      const token = localStorage.getItem("token");
-      if (!token) {
-        router.push("/login");
-        return;
-      }
-
-      const profileResponse = await fetch(`${API}/api/v1/users/me`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      if (!profileResponse.ok) {
-        router.push("/login");
-        return;
-      }
-
-      const profile = await profileResponse.json();
-      const response = await fetch(`${API}/api/v1/bookings/user/${profile.id}`, {
-        headers: { Authorization: `Bearer ${token}` },
+      const response = await fetch(`${API}/api/v1/bookings/${bookingId}/status`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ status }),
       });
 
       if (!response.ok) {
-        return;
+        const detail = await response.json().catch(() => null);
+        throw new Error(detail?.detail || "Unable to update booking");
       }
 
-      const data: BookingItem[] = await response.json();
-      setBookings(data);
-    } catch (error) {
-      console.error("Failed to fetch bookings", error);
+      const updated = await response.json();
+      setBookings((prev) => prev.map((booking) => (booking.id === bookingId ? updated : booking)));
+      setNotification(`Booking #${bookingId} updated to ${statusLabel[status]}`);
+      setTimeout(() => setNotification(null), 2500);
+    } catch (statusError) {
+      setError(statusError instanceof Error ? statusError.message : "Unable to update booking");
     } finally {
-      setLoading(false);
+      setBusyBookingId(null);
     }
   };
 
-  useEffect(() => {
-    fetchBookings();
-  }, []);
-
-  const grouped = useMemo(() => {
-    const upcoming = bookings.filter((b) => new Date(b.booking_time) > new Date());
-    const past = bookings.filter((b) => new Date(b.booking_time) <= new Date());
-    return { upcoming, past };
-  }, [bookings]);
-
-  const handleCancel = async (bookingId: number) => {
-    const token = localStorage.getItem("token");
-    if (!token) {
-      router.push("/login");
+  const requestReschedule = async (bookingId: number) => {
+    const value = rescheduleDraft[bookingId];
+    if (!value) {
+      setError("Please pick a new date and time first.");
       return;
     }
 
-    const response = await fetch(`${API}/api/v1/bookings/${bookingId}/status`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({ status: "cancelled" }),
-    });
-
-    if (response.ok) {
-      const updated = await response.json();
-      setBookings((prev) => prev.map((b) => (b.id === bookingId ? updated : b)));
-      setNotification(`Booking #${bookingId} cancelled`);
-      setTimeout(() => setNotification(null), 3000);
-    }
-  };
-
-  const handleRescheduleRequest = async (bookingId: number, newTime: string) => {
     const token = localStorage.getItem("token");
     if (!token) {
-      router.push("/login");
+      router.push("/login?next=%2Fmy-bookings");
       return;
     }
 
-    const response = await fetch(`${API}/api/v1/bookings/${bookingId}/reschedule`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({ booking_time: new Date(newTime).toISOString() }),
-    });
+    setBusyBookingId(bookingId);
+    setError(null);
+    try {
+      const response = await fetch(`${API}/api/v1/bookings/${bookingId}/reschedule`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ booking_time: new Date(value).toISOString() }),
+      });
 
-    if (response.ok) {
+      if (!response.ok) {
+        const detail = await response.json().catch(() => null);
+        throw new Error(detail?.detail || "Unable to request reschedule");
+      }
+
       const updated = await response.json();
-      setBookings((prev) => prev.map((b) => (b.id === bookingId ? updated : b)));
+      setBookings((prev) => prev.map((booking) => (booking.id === bookingId ? updated : booking)));
+      setRescheduleDraft((prev) => ({ ...prev, [bookingId]: "" }));
       setNotification(`Reschedule requested for booking #${bookingId}`);
-      setTimeout(() => setNotification(null), 3000);
+      setTimeout(() => setNotification(null), 2500);
+    } catch (rescheduleError) {
+      setError(rescheduleError instanceof Error ? rescheduleError.message : "Unable to request reschedule");
+    } finally {
+      setBusyBookingId(null);
     }
   };
+
+  const sortedBookings = useMemo(
+    () => [...bookings].sort((a, b) => new Date(b.booking_time).getTime() - new Date(a.booking_time).getTime()),
+    [bookings],
+  );
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-24 w-24 border-b-2 border-purple-600"></div>
+      <div className="app-shell">
+        <div className="app-container space-y-4">
+          <div className="ds-card h-24 animate-pulse bg-slate-200" />
+          <div className="ds-card h-28 animate-pulse bg-slate-200" />
+          <div className="ds-card h-28 animate-pulse bg-slate-200" />
+        </div>
+      </div>
+    );
+  }
+
+  if (error && bookings.length === 0) {
+    return (
+      <div className="app-shell">
+        <div className="app-container">
+          <section className="ds-card text-center">
+            <h1 className="text-xl font-semibold text-slate-900">Unable to load bookings</h1>
+            <p className="mt-2 text-sm text-slate-600">{error}</p>
+            <button onClick={() => window.location.reload()} className="ds-btn-primary mt-5" type="button">
+              Retry
+            </button>
+          </section>
+        </div>
+      </div>
+    );
+  }
+
+  if (sortedBookings.length === 0) {
+    return (
+      <div className="app-shell">
+        <div className="app-container">
+          <section className="ds-card text-center">
+            <h1 className="text-2xl font-semibold text-slate-900">My Bookings</h1>
+            <p className="mt-2 text-sm text-slate-600">View your scheduled services and booking updates.</p>
+            <button onClick={() => router.push("/search?type=service")} className="ds-btn-primary mt-5" type="button">
+              Explore Services
+            </button>
+          </section>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 px-4 py-8">
-      <div className="max-w-5xl mx-auto">
-        <div className="flex items-center justify-between mb-6">
-          <h1 className="text-3xl font-bold">My Bookings</h1>
-          <button
-            onClick={fetchBookings}
-            className="text-sm text-purple-600 hover:underline"
-          >
-            Refresh
-          </button>
-        </div>
-
-        {notification && (
-          <div className="mb-6 rounded-lg bg-blue-50 px-4 py-3 text-sm text-blue-700">
-            {notification}
+    <div className="app-shell">
+      <div className="app-container space-y-5">
+        <section className="ds-hero-card">
+          <h1 className="text-2xl font-semibold text-slate-900 sm:text-3xl">My Bookings</h1>
+          <p className="mt-2 text-sm text-slate-600">View your scheduled services and booking updates.</p>
+          <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-500">
+            <span className="rounded-full bg-slate-100 px-3 py-1">Book Service</span>
+            <span className="rounded-full bg-slate-100 px-3 py-1">Booking Confirmed</span>
+            <span className="rounded-full bg-slate-100 px-3 py-1">My Bookings</span>
           </div>
+        </section>
+
+        {searchParams.get("from") === "booking" && (
+          <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+            Booking confirmed successfully. You can track updates here.
+          </p>
         )}
 
-        {["upcoming", "past"].map((section) => (
-          <div key={section} className="mb-8">
-            <h2 className="text-xl font-semibold mb-4 capitalize">{section} bookings</h2>
-            <div className="space-y-4">
-              {(grouped as any)[section].map((booking: BookingItem) => (
-                <BookingCard
-                  key={booking.id}
-                  booking={booking}
-                  onCancel={handleCancel}
-                  onReschedule={handleRescheduleRequest}
-                />
-              ))}
-              {(grouped as any)[section].length === 0 && (
-                <p className="text-sm text-gray-500">No bookings found.</p>
-              )}
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
+        {notification && <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{notification}</p>}
+        {error && <p className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</p>}
 
-function BookingCard({
-  booking,
-  onCancel,
-  onReschedule,
-}: {
-  booking: BookingItem;
-  onCancel: (id: number) => void;
-  onReschedule: (id: number, time: string) => void;
-}) {
-  const [draft, setDraft] = useState("");
-  const statusIndex = STATUS_STEPS.indexOf(booking.status);
+        <section className="space-y-3">
+          {sortedBookings.map((booking) => {
+            const listing = getListing(booking.service_id);
+            const expanded = expandedBookingId === booking.id;
+            const busy = busyBookingId === booking.id;
+            const canEdit = canManage(booking.status);
 
-  return (
-    <div className="bg-white rounded-xl shadow p-5">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <p className="font-semibold">Booking #{booking.id}</p>
-          <p className="text-sm text-gray-500">Service Listing #{booking.listing_id ?? booking.service_id}</p>
-          <p className="text-sm text-gray-500">{new Date(booking.booking_time).toLocaleString()}</p>
-        </div>
-        <span className="text-xs px-3 py-1 rounded-full bg-purple-50 text-purple-700">
-          {booking.status}
-        </span>
-      </div>
+            return (
+              <article key={booking.id} className="ds-card space-y-3">
+                <div className="flex items-start gap-3">
+                  <img
+                    src={resolveProductImageSrc(listing?.image_url, API)}
+                    alt={listing?.title || "Service"}
+                    className="h-16 w-16 rounded-xl object-cover"
+                    onError={(event) => {
+                      event.currentTarget.src = FALLBACK_PRODUCT_IMAGE;
+                    }}
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <h2 className="line-clamp-1 text-base font-semibold text-slate-900">
+                        {listing?.title || `Service #${booking.service_id}`}
+                      </h2>
+                      <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${badgeStyle[booking.status] || "bg-slate-50 text-slate-700 border-slate-200"}`}>
+                        {statusLabel[booking.status] || booking.status}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-500">Booking #{booking.id} • {new Date(booking.booking_time).toLocaleString()}</p>
+                    <p className="mt-1 text-sm text-slate-600">Amount: ₹{booking.total_amount.toFixed(2)}</p>
+                    {listing?.seller_business_name && <p className="text-xs text-slate-500">Provider: {listing.seller_business_name}</p>}
+                  </div>
+                </div>
 
-      <div className="mt-4 text-sm text-gray-600">
-        <p>Total: ₹{booking.total_amount}</p>
-        {booking.buyer_notes && <p>Notes: {booking.buyer_notes}</p>}
-        {booking.seller_notes && <p>Seller notes: {booking.seller_notes}</p>}
-      </div>
+                {expanded && (
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">
+                    <p>{listing?.description?.trim() || "Service details are available on the listing page."}</p>
+                    {booking.original_booking_time && (
+                      <p className="mt-2 text-xs text-slate-500">
+                        Original time: {new Date(booking.original_booking_time).toLocaleString()}
+                      </p>
+                    )}
+                    {(booking.buyer_notes || booking.notes) && (
+                      <p className="mt-2 text-xs text-slate-500">Your notes: {booking.buyer_notes || booking.notes}</p>
+                    )}
+                    {booking.seller_notes && <p className="mt-1 text-xs text-slate-500">Provider notes: {booking.seller_notes}</p>}
 
-      <div className="mt-4">
-        <div className="flex items-center justify-between text-xs text-gray-500">
-          {STATUS_STEPS.map((step, index) => (
-            <span key={step} className={index <= statusIndex ? "text-purple-600" : ""}>
-              {step}
-            </span>
-          ))}
-        </div>
-        <div className="mt-2 h-2 rounded-full bg-gray-100">
-          <div className="h-2 rounded-full bg-purple-500" style={{ width: `${((statusIndex + 1) / STATUS_STEPS.length) * 100}%` }} />
-        </div>
-      </div>
+                    {canEdit && (
+                      <div className="mt-3 space-y-2">
+                        <label className="text-xs font-medium text-slate-600">Request reschedule</label>
+                        <input
+                          type="datetime-local"
+                          value={rescheduleDraft[booking.id] || ""}
+                          onChange={(event) =>
+                            setRescheduleDraft((prev) => ({
+                              ...prev,
+                              [booking.id]: event.target.value,
+                            }))
+                          }
+                          className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400"
+                        />
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() => requestReschedule(booking.id)}
+                          className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+                        >
+                          Send Reschedule Request
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
 
-      <div className="mt-4 flex flex-wrap gap-2">
-        <button
-          onClick={() => onCancel(booking.id)}
-          className="px-3 py-1 rounded bg-red-50 text-red-700 text-xs"
-        >
-          Cancel booking
-        </button>
-      </div>
-
-      <div className="mt-4">
-        <label className="text-xs text-gray-500">Request reschedule</label>
-        <input
-          type="datetime-local"
-          value={draft}
-          onChange={(event) => setDraft(event.target.value)}
-          className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
-        />
-        <button
-          onClick={() => onReschedule(booking.id, draft)}
-          className="mt-2 text-xs text-purple-600"
-        >
-          Send reschedule request
-        </button>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setExpandedBookingId(expanded ? null : booking.id)}
+                    className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                  >
+                    {expanded ? "Hide Details" : "View Details"}
+                  </button>
+                  {listing?.seller_id ? (
+                    <button
+                      type="button"
+                      onClick={() => router.push(`/store/${listing.seller_id}`)}
+                      className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                    >
+                      Contact Provider
+                    </button>
+                  ) : null}
+                  {canEdit && (
+                    <button
+                      type="button"
+                      onClick={() => updateStatus(booking.id, "cancelled")}
+                      disabled={busy}
+                      className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-100 disabled:opacity-60"
+                    >
+                      Cancel Booking
+                    </button>
+                  )}
+                </div>
+              </article>
+            );
+          })}
+        </section>
       </div>
     </div>
   );

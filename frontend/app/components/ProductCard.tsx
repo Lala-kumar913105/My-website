@@ -1,8 +1,10 @@
 "use client";
 
+import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
-import { useI18n } from "@/app/i18n/context";
+import { useI18n } from "../i18n/context";
 import { GoogleMap, LoadScript, Marker } from '@react-google-maps/api';
+import { FALLBACK_PRODUCT_IMAGE, resolveProductImageSrc } from "../../lib/image";
 
 interface Product {
   id: number;
@@ -31,7 +33,15 @@ interface ProductCardProps {
 const ProductCard = ({ product }: ProductCardProps) => {
   const { t } = useI18n();
   const API = process.env.NEXT_PUBLIC_API_BASE_URL;
-  const imageSrc = product.image_url ? `${API}${product.image_url}` : "/default-product.png";
+  const initialImageSrc = useMemo(
+    () => resolveProductImageSrc(product.image_url, API),
+    [product.image_url, API],
+  );
+  const [imageSrc, setImageSrc] = useState(initialImageSrc);
+
+  useEffect(() => {
+    setImageSrc(initialImageSrc);
+  }, [initialImageSrc]);
   const trackActivity = async (activityType: string) => {
     try {
       const token = localStorage.getItem("token");
@@ -93,6 +103,9 @@ const ProductCard = ({ product }: ProductCardProps) => {
       });
 
       if (response.ok) {
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new Event("cart:changed"));
+        }
         alert("Added to cart");
         trackActivity("cart_add");
       } else if (response.status === 401) {
@@ -147,9 +160,11 @@ const ProductCard = ({ product }: ProductCardProps) => {
         alt={product.name}
         width={200}
         height={200}
+        unoptimized
         sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 25vw"
         className="w-full h-48 object-cover mb-4 rounded"
         onClick={() => trackActivity("view_product")}
+        onError={() => setImageSrc(FALLBACK_PRODUCT_IMAGE)}
       />
 
       <h2 className="text-xl font-semibold mb-2">{product.name}</h2>

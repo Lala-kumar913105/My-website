@@ -14,6 +14,9 @@ class Service(Base):
     description = Column(Text, nullable=True)
     price = Column(Float, nullable=False)
     duration_minutes = Column(Integer, nullable=False) # Duration of the service in minutes
+    latitude = Column(Float, nullable=True)
+    longitude = Column(Float, nullable=True)
+    address = Column(String, nullable=True)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())

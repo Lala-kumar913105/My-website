@@ -2,16 +2,44 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 
 ## Getting Started
 
-First, run the development server:
+Run the development server from the repository root (recommended):
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+```
+
+or directly inside `frontend/`:
+
+```bash
+npm run dev
+```
+
+Stop the running frontend dev server:
+
+```bash
+npm run dev:stop
+```
+
+Restart the frontend dev server safely:
+
+```bash
+npm run dev:restart
+```
+
+### Why this is the correct workflow
+
+- `frontend/package.json` + `frontend/package-lock.json` are the source of truth for the Next.js app.
+- root-level `npm run dev` forwards to `frontend` so you always run the right app.
+- `frontend` dev uses `scripts/dev-safe.mjs` which:
+  - prevents accidental duplicate `next dev` sessions,
+  - safely removes stale `frontend/.next/dev/lock` when no real frontend dev process exists.
+- `dev:stop` safely shuts down tracked and stray frontend `next dev` processes and clears stale lock files when safe.
+- `dev:restart` runs `dev:stop` first, then starts the frontend again with `dev-safe`.
+
+If you truly need raw Next behavior, use:
+
+```bash
+npm run dev:raw
 ```
 
 Open your deployed frontend URL (or local dev URL) in your browser to see the result.

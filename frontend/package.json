@@ -3,21 +3,27 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "node ./scripts/dev-safe.mjs",
+    "dev:stop": "node ./scripts/dev-stop.mjs",
+    "dev:restart": "node ./scripts/dev-restart.mjs",
+    "dev:raw": "next dev",
     "build": "next build",
     "start": "next start"
   },
   "dependencies": {
     "@react-google-maps/api": "^2.20.8",
     "firebase": "^12.11.0",
+    "leaflet": "^1.9.4",
     "next": "16.1.6",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-hot-toast": "^2.6.0",
+    "react-leaflet": "^5.0.0",
     "swr": "^2.4.1"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@types/leaflet": "^1.9.21",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",

@@ -2,7 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import ListingCard, { Listing } from '@/app/components/ListingCard';
+import ListingCard, { Listing } from '../../components/ListingCard';
 import useSWR from 'swr';
 
 interface Seller {
@@ -99,10 +99,10 @@ const SellerStorePage: React.FC<PageProps> = ({ params }) => {
             {isFollowing ? 'Unfollow' : 'Follow'}
           </button>
           <button
-            onClick={() => router.push('/chat')}
+            onClick={() => router.push('/assistant')}
             className="rounded-full border border-purple-200 px-4 py-2 text-sm text-purple-600"
           >
-            Message Seller
+            Ask AI Assistant
           </button>
         </div>
         <div className="flex flex-wrap gap-4 text-sm text-gray-500">
