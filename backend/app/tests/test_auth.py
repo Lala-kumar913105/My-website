@@ -16,8 +16,24 @@ async def test_register_and_duplicate_email(async_client):
     assert data["user"]["email"] == "auth-user@example.com"
 
     duplicate_response = await async_client.post("/api/v1/auth/register", json=payload)
-    assert duplicate_response.status_code == 400
+    assert duplicate_response.status_code == 409
     assert duplicate_response.json()["detail"] == "Email already registered"
+
+
+@pytest.mark.asyncio
+async def test_register_rejects_password_longer_than_72_bytes(async_client):
+    long_password = "A" * 73 + "a1!"
+    response = await async_client.post(
+        "/api/v1/auth/register",
+        json={
+            "email": "long-password@example.com",
+            "password": long_password,
+            "full_name": "Long Password User",
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Password must be at most 72 bytes long"
 
 
 @pytest.mark.asyncio
