@@ -105,13 +105,12 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
 
 def set_auth_cookie(response: Response, token: str) -> None:
     max_age = settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60
-    is_production = bool(getattr(settings, "is_production", False))
     response.set_cookie(
         key=AUTH_COOKIE_NAME,
         value=token,
         httponly=True,
-        secure=is_production,
-        samesite="none" if is_production else "lax",
+        secure=True,
+        samesite="none",
         max_age=max_age,
         path="/",
     )
@@ -248,8 +247,8 @@ def get_current_user(
             raise HTTPException(status_code=401, detail="Invalid token payload")
 
         user = crud.get_user(db, user_id=user_id)
-        if user is None or not getattr(user, "is_active", False):
-            raise HTTPException(status_code=401, detail="Invalid or inactive user")
+        if user is None:
+            raise HTTPException(status_code=401, detail="User not found")
 
         return user
     except ExpiredSignatureError:
@@ -273,8 +272,12 @@ def get_current_user_optional(
 
     try:
         payload = decode_access_token(token)
-        user_id: int = payload.get("user_id")
-        if user_id is None:
+        raw_user_id = payload.get("sub")
+        if raw_user_id is None:
+            return None
+        try:
+            user_id = int(raw_user_id)
+        except (TypeError, ValueError):
             return None
         user = crud.get_user(db, user_id=user_id)
         return user
