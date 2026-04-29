@@ -229,11 +229,14 @@ def get_current_user(
     else:
         token = _extract_token_from_request(request)
 
+    print("AUTH COOKIE EXISTS:", bool(token))
+
     if not token:
         raise HTTPException(status_code=401, detail="Not authenticated")
 
     try:
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[JWT_ALGORITHM])
+        print("JWT PAYLOAD:", payload)
         if payload.get("type") and payload.get("type") != "access":
             raise HTTPException(status_code=401, detail="Invalid token type")
 
@@ -251,13 +254,16 @@ def get_current_user(
             raise HTTPException(status_code=401, detail="User not found")
 
         return user
-    except ExpiredSignatureError:
+    except ExpiredSignatureError as e:
+        print("JWT ERROR:", str(e))
         raise HTTPException(status_code=401, detail="Token has expired")
-    except JWTError:
+    except JWTError as e:
+        print("JWT ERROR:", str(e))
         raise HTTPException(status_code=401, detail="Invalid token")
     except HTTPException:
         raise
-    except Exception:
+    except Exception as e:
+        print("JWT ERROR:", str(e))
         raise HTTPException(status_code=401, detail="Invalid token")
 
 
