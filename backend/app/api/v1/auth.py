@@ -133,7 +133,7 @@ def register_with_email(
             detail="Unexpected server error while creating account.",
         ) from exc
 
-    access_token = create_access_token(data={"sub": str(user.id), "user_id": user.id})
+    access_token = create_access_token(data={"sub": str(user.id), "email": user.email})
     refresh_token = create_refresh_token(data={"sub": str(user.id), "user_id": user.id})
     set_auth_cookie(response, access_token)
 
@@ -185,7 +185,7 @@ def login_with_email(
 
     _ensure_profile(db, user.id)
 
-    access_token = create_access_token(data={"sub": str(user.id), "user_id": user.id})
+    access_token = create_access_token(data={"sub": str(user.id), "email": user.email})
     refresh_token = create_refresh_token(data={"sub": str(user.id), "user_id": user.id})
     set_auth_cookie(response, access_token)
 
@@ -325,7 +325,7 @@ def verify_otp_and_login(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    access_token = create_access_token(data={"sub": str(user.id), "user_id": user.id})
+    access_token = create_access_token(data={"sub": str(user.id), "email": user.email})
     refresh_token = create_refresh_token(data={"sub": str(user.id), "user_id": user.id})
     set_auth_cookie(response, access_token)
 
@@ -348,5 +348,5 @@ def refresh_access_token(payload: RefreshRequest, db: Session = Depends(get_db))
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    access_token = create_access_token(data={"sub": str(user.id), "user_id": user.id})
+    access_token = create_access_token(data={"sub": str(user.id), "email": user.email})
     return Token(access_token=access_token, refresh_token=None, token_type="bearer")

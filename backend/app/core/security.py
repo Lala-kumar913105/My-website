@@ -2,10 +2,11 @@ import secrets
 import string
 import hashlib
 import re
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional, List
 
-import jwt
+from jose import jwt, JWTError
+from jose.exceptions import ExpiredSignatureError
 from fastapi import HTTPException, Depends, Request, Response
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from passlib.context import CryptContext
@@ -85,31 +86,34 @@ def get_password_hash(password: str) -> str:
 
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
-    """Create a JWT access token with the given data and expiration time."""
-    to_encode = data.copy()
-    now = datetime.utcnow()
+    """Create a JWT access token with stable claims for cookie auth."""
+    now = datetime.now(timezone.utc)
+    expire = now + (expires_delta or timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES))
 
-    if expires_delta:
-        expire = now + expires_delta
-    else:
-        expire = now + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    payload = {
+        "sub": str(data.get("sub", "")),
+        "email": data.get("email"),
+        "type": "access",
+        "iat": int(now.timestamp()),
+        "exp": int(expire.timestamp()),
+    }
+    if not payload["sub"]:
+        raise ValueError("Token subject is required")
 
-    to_encode.update({"iat": now, "exp": expire, "type": "access"})
-    encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=JWT_ALGORITHM)
-    return encoded_jwt
+    return jwt.encode(payload, settings.SECRET_KEY, algorithm=JWT_ALGORITHM)
 
 
 def set_auth_cookie(response: Response, token: str) -> None:
     max_age = settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60
+    is_production = bool(getattr(settings, "is_production", False))
     response.set_cookie(
         key=AUTH_COOKIE_NAME,
         value=token,
         httponly=True,
-        secure=True,
-        samesite="none",
+        secure=is_production,
+        samesite="none" if is_production else "lax",
         max_age=max_age,
         path="/",
-        domain=".zivolf.com",
     )
 
 
@@ -144,9 +148,9 @@ def decode_access_token(token: str) -> dict:
         if payload.get("type") != "access":
             raise HTTPException(status_code=401, detail="Invalid token type")
         return payload
-    except jwt.ExpiredSignatureError:
+    except ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Token has expired")
-    except jwt.InvalidTokenError:
+    except JWTError:
         raise HTTPException(status_code=401, detail="Invalid token")
 
 
@@ -157,9 +161,9 @@ def decode_refresh_token(token: str) -> dict:
         if payload.get("type") != "refresh":
             raise HTTPException(status_code=401, detail="Invalid token type")
         return payload
-    except jwt.ExpiredSignatureError:
+    except ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Refresh token has expired")
-    except jwt.InvalidTokenError:
+    except JWTError:
         raise HTTPException(status_code=401, detail="Invalid refresh token")
 
 
@@ -236,10 +240,6 @@ def get_current_user(
 
         raw_user_id = payload.get("sub")
         if raw_user_id is None:
-            raw_user_id = payload.get("user_id")
-        if raw_user_id is None:
-            raw_user_id = payload.get("id")
-        if raw_user_id is None:
             raise HTTPException(status_code=401, detail="Invalid token payload")
 
         try:
@@ -252,9 +252,9 @@ def get_current_user(
             raise HTTPException(status_code=401, detail="Invalid or inactive user")
 
         return user
-    except jwt.ExpiredSignatureError:
+    except ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Token has expired")
-    except jwt.InvalidTokenError:
+    except JWTError:
         raise HTTPException(status_code=401, detail="Invalid token")
     except HTTPException:
         raise
