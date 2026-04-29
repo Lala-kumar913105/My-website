@@ -13,6 +13,7 @@ from pydantic import EmailStr
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app import crud
 from app.db.session import get_db
 from app.models.user import RoleEnum
 from app.models.user import User
@@ -100,16 +101,15 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
 
 def set_auth_cookie(response: Response, token: str) -> None:
     max_age = settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60
-    cookie_domain = ".zivolf.com" if settings.is_production else None
     response.set_cookie(
         key=AUTH_COOKIE_NAME,
         value=token,
         httponly=True,
-        secure=True if settings.is_production else False,
-        samesite="none" if settings.is_production else "lax",
+        secure=True,
+        samesite="none",
         max_age=max_age,
         path="/",
-        domain=cookie_domain,
+        domain=".zivolf.com",
     )
 
 
@@ -216,7 +216,7 @@ def _extract_token_from_request(request: Request) -> Optional[str]:
 
 def get_current_user(
     request: Request,
-    credentials: HTTPAuthorizationCredentials | None = Depends(optional_security),
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(optional_security),
     db: Session = Depends(get_db),
 ):
     """Get the current user from the JWT token."""
@@ -243,7 +243,7 @@ def get_current_user(
 
 def get_current_user_optional(
     request: Request,
-    credentials: HTTPAuthorizationCredentials | None = Depends(optional_security),
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(optional_security),
     db: Session = Depends(get_db),
 ):
     token = credentials.credentials if credentials else _extract_token_from_request(request)

@@ -1,3 +1,1 @@
-/home/freefirelover/ecommerce website/backend/venv/lib/python3.11/site-packages/pydantic/_internal/_config.py:318: UserWarning: Valid config keys have changed in V2:
-* 'orm_mode' has been renamed to 'from_attributes'
-  warnings.warn(message, UserWarning)
+/usr/bin/python3: No module named uvicorn
