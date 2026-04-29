@@ -230,18 +230,34 @@ def get_current_user(
         raise HTTPException(status_code=401, detail="Not authenticated")
 
     try:
-        payload = decode_access_token(token)
-        user_id: int = payload.get("user_id")
-        if user_id is None:
-            raise HTTPException(status_code=401, detail="Invalid token")
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[JWT_ALGORITHM])
+        if payload.get("type") and payload.get("type") != "access":
+            raise HTTPException(status_code=401, detail="Invalid token type")
+
+        raw_user_id = payload.get("sub")
+        if raw_user_id is None:
+            raw_user_id = payload.get("user_id")
+        if raw_user_id is None:
+            raw_user_id = payload.get("id")
+        if raw_user_id is None:
+            raise HTTPException(status_code=401, detail="Invalid token payload")
+
+        try:
+            user_id = int(raw_user_id)
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=401, detail="Invalid token payload")
 
         user = crud.get_user(db, user_id=user_id)
-        if user is None:
-            raise HTTPException(status_code=401, detail="User not found")
+        if user is None or not getattr(user, "is_active", False):
+            raise HTTPException(status_code=401, detail="Invalid or inactive user")
 
         return user
-    except HTTPException as e:
-        raise e
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token has expired")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    except HTTPException:
+        raise
     except Exception:
         raise HTTPException(status_code=401, detail="Invalid token")
 
