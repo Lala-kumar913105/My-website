@@ -109,10 +109,6 @@ export default function CartPage() {
     setError(null);
 
     const token = localStorage.getItem("token");
-    if (!token) {
-      handleUnauthorized();
-      return;
-    }
 
     try {
       const response = await fetch(`${API}/api/v1/carts/items/${item.id}`, {
@@ -156,10 +152,6 @@ export default function CartPage() {
     setError(null);
 
     const token = localStorage.getItem("token");
-    if (!token) {
-      handleUnauthorized();
-      return;
-    }
 
     try {
       const response = await fetch(`${API}/api/v1/carts/remove`, {

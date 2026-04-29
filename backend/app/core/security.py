@@ -100,22 +100,26 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
 
 def set_auth_cookie(response: Response, token: str) -> None:
     max_age = settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60
+    cookie_domain = ".zivolf.com" if settings.is_production else None
     response.set_cookie(
         key=AUTH_COOKIE_NAME,
         value=token,
         httponly=True,
-        secure=settings.is_production,
+        secure=True if settings.is_production else False,
         samesite="none" if settings.is_production else "lax",
         max_age=max_age,
         path="/",
+        domain=cookie_domain,
     )
 
 
 def clear_auth_cookie(response: Response) -> None:
+    cookie_domain = ".zivolf.com" if settings.is_production else None
     response.delete_cookie(
         key=AUTH_COOKIE_NAME,
         path="/",
         samesite="none" if settings.is_production else "lax",
+        domain=cookie_domain,
     )
 
 

@@ -119,19 +119,15 @@ export default function ProfilePage() {
   const getStoredAuth = useCallback(() => {
     const rawToken = localStorage.getItem('token')
     const token = rawToken?.replace(/^Bearer\s+/i, '').trim() || ''
-    const phoneNumber = localStorage.getItem('phone_number')?.trim() || ''
-    const otp = localStorage.getItem('otp')?.trim() || ''
 
-    return { token, phoneNumber, otp }
+    return { token }
   }, [])
 
-  const fetchSellerProfile = useCallback(async (token: string) => {
+  const fetchSellerProfile = useCallback(async (token?: string) => {
     setSellerLoading(true)
     try {
       const response = await fetch(`${apiBaseUrl}/api/v1/sellers/me`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
         credentials: 'include',
       })
 
@@ -161,18 +157,12 @@ export default function ProfilePage() {
 
   const handleBecomeSeller = useCallback(async () => {
     const token = getStoredAuth().token
-    if (!token) {
-      handleSessionExpired('Please login to continue.')
-      return
-    }
 
     try {
       setBecomingSeller(true)
       const response = await fetch(`${apiBaseUrl}/api/v1/sellers/become-seller`, {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
         credentials: 'include',
       })
 
@@ -196,25 +186,11 @@ export default function ProfilePage() {
     }
   }, [apiBaseUrl, getStoredAuth, handleSessionExpired])
 
-  const buildAuthHeaders = useCallback((): HeadersInit | null => {
-    const { token, phoneNumber, otp } = getStoredAuth()
-
-    if (!token && !phoneNumber) {
-      return null
-    }
-
+  const buildAuthHeaders = useCallback((): HeadersInit => {
+    const { token } = getStoredAuth()
     const headers: HeadersInit = {}
-
     if (token) {
       headers.Authorization = `Bearer ${token}`
-    }
-
-    if (phoneNumber) {
-      headers['x-phone-number'] = phoneNumber
-    }
-
-    if (otp) {
-      headers['x-otp'] = otp
     }
 
     return headers
@@ -226,16 +202,12 @@ export default function ProfilePage() {
     const fetchProfile = async () => {
       const headers = buildAuthHeaders()
 
-      if (!headers) {
-        handleSessionExpired('Please login to continue.')
-        return
-      }
-
       try {
         setError(null)
 
-        const res = await fetch('/api/profile', {
+        const res = await fetch(`${apiBaseUrl}/api/v1/users/me`, {
           headers,
+          credentials: 'include',
           cache: 'no-store',
         })
 
@@ -264,19 +236,13 @@ export default function ProfilePage() {
 
         if (!isMounted) return
 
-        if (data?.accessToken) {
-          localStorage.setItem('token', data.accessToken)
-        }
-
         const payload = normalizeProfileData(data)
 
         setProfile(payload)
         setFormData(payload)
         setAvatarPreview(payload.profileImage || DEFAULT_AVATAR)
 
-        const latestToken =
-          data?.accessToken ||
-          getStoredAuth().token
+        const latestToken = getStoredAuth().token
 
         if (latestToken) {
           try {
@@ -374,11 +340,6 @@ export default function ProfilePage() {
     setAvatarPreview(previewUrl)
 
     const headers = buildAuthHeaders()
-    if (!headers) {
-      setAvatarPreview(previousPreview || DEFAULT_AVATAR)
-      handleSessionExpired('Session expired. Please login again.')
-      return
-    }
 
     const form = new FormData()
     form.append('file', file)
@@ -386,9 +347,10 @@ export default function ProfilePage() {
     try {
       setIsUploading(true)
 
-      const response = await fetch('/api/profile', {
+      const response = await fetch(`${apiBaseUrl}/api/v1/profile/avatar`, {
         method: 'POST',
         headers,
+        credentials: 'include',
         body: form,
       })
 
@@ -447,20 +409,16 @@ export default function ProfilePage() {
 
     const headers = buildAuthHeaders()
 
-    if (!headers) {
-      handleSessionExpired('Session expired. Please login again.')
-      return
-    }
-
     try {
       setIsSaving(true)
 
-      const response = await fetch('/api/profile', {
+      const response = await fetch(`${apiBaseUrl}/api/v1/profile/update`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
           ...headers,
         },
+        credentials: 'include',
         body: JSON.stringify({
           name: formData.name,
           email: formData.email,
@@ -503,10 +461,6 @@ export default function ProfilePage() {
       setFormData(updatedPayload)
       setAvatarPreview(updatedPayload.profileImage || DEFAULT_AVATAR)
       setError(null)
-
-      if (updatedUser?.accessToken) {
-        localStorage.setItem('token', updatedUser.accessToken)
-      }
 
       toast.success('Profile updated')
     } catch (error) {
