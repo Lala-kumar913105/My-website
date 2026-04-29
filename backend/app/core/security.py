@@ -19,7 +19,7 @@ from app.models.user import RoleEnum
 from app.models.user import User
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-security = HTTPBearer()
+security = HTTPBearer(auto_error=False)
 optional_security = HTTPBearer(auto_error=False)
 
 AUTH_COOKIE_NAME = "access_token"
@@ -220,7 +220,12 @@ def get_current_user(
     db: Session = Depends(get_db),
 ):
     """Get the current user from the JWT token."""
-    token = credentials.credentials if credentials else _extract_token_from_request(request)
+    token = None
+    if credentials and credentials.credentials:
+        token = credentials.credentials
+    else:
+        token = _extract_token_from_request(request)
+
     if not token:
         raise HTTPException(status_code=401, detail="Not authenticated")
 
