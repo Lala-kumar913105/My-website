@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import LanguageToggle from "./LanguageToggle";
-import { API_BASE_URL, logoutUser } from "../../lib/auth";
+import { API_BASE_URL, getValidLegacyToken, logoutUser } from "../../lib/auth";
 
 const CART_CHANGED_EVENT = "cart:changed";
 
@@ -16,6 +16,8 @@ export default function TopHeader() {
   const [searchText, setSearchText] = useState("");
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [logoutLoading, setLogoutLoading] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [hydrated, setHydrated] = useState(false);
 
   const isSearchPage = pathname === "/search";
 
@@ -31,25 +33,24 @@ export default function TopHeader() {
   const fetchCartCount = useCallback(async () => {
     if (typeof window === "undefined") return;
 
-    const token = localStorage.getItem("token");
-    setIsAuthenticated(Boolean(token));
-    if (!token) {
-      setCartCount(0);
-      return;
-    }
+    const token = getValidLegacyToken();
 
     try {
       const meResponse = await fetch(`${API_BASE_URL}/api/v1/users/me`, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
         credentials: "include",
       });
 
       if (!meResponse.ok) {
+        if (meResponse.status === 401) {
+          setIsAuthenticated(false);
+        }
         setCartCount(0);
         return;
       }
 
       const me = await meResponse.json();
+      setIsAuthenticated(Boolean(me?.id));
       if (!me?.id) {
         setCartCount(0);
         return;
@@ -63,7 +64,7 @@ export default function TopHeader() {
       }
 
       const cartResponse = await fetch(`${API_BASE_URL}/api/v1/carts/${me.id}`, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
         credentials: "include",
       });
 
@@ -78,11 +79,13 @@ export default function TopHeader() {
         : 0;
       setCartCount(count);
     } catch {
+      setIsAuthenticated(false);
       setCartCount(0);
     }
   }, []);
 
   useEffect(() => {
+    setHydrated(true);
     void fetchCartCount();
 
     const onCartChanged = () => {
@@ -118,7 +121,8 @@ export default function TopHeader() {
     } finally {
       setCartCount(0);
       setIsAuthenticated(false);
-      router.push('/login');
+      setMobileMenuOpen(false);
+      router.push('/');
       setLogoutLoading(false);
     }
   };
@@ -156,18 +160,27 @@ export default function TopHeader() {
           <button
             type="button"
             onClick={() => router.push("/profile")}
-            className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-300"
+            className="hidden rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-300 sm:inline-flex"
           >
-            Account
+            {hydrated && isAuthenticated ? "Profile" : "Login"}
           </button>
-          {isAuthenticated && (
+          {hydrated && isAuthenticated && (
             <button
               type="button"
               onClick={handleLogout}
               disabled={logoutLoading}
-              className="rounded-full border border-rose-200 bg-white px-4 py-2 text-sm font-medium text-rose-700 transition hover:border-rose-300 disabled:opacity-70"
+              className="hidden rounded-full border border-rose-200 bg-white px-4 py-2 text-sm font-medium text-rose-700 transition hover:border-rose-300 disabled:opacity-70 sm:inline-flex"
             >
               {logoutLoading ? 'Logging out...' : 'Logout'}
+            </button>
+          )}
+          {hydrated && !isAuthenticated && (
+            <button
+              type="button"
+              onClick={() => router.push('/register')}
+              className="hidden rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-300 sm:inline-flex"
+            >
+              Register
             </button>
           )}
           <button
@@ -183,8 +196,67 @@ export default function TopHeader() {
               </span>
             )}
           </button>
+          <button
+            type="button"
+            aria-label="Toggle menu"
+            onClick={() => setMobileMenuOpen((prev) => !prev)}
+            className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-lg text-slate-700 sm:hidden"
+          >
+            ☰
+          </button>
         </div>
       </div>
+      {mobileMenuOpen && (
+        <div className="border-t border-slate-200 bg-white px-4 py-3 sm:hidden">
+          <div className="flex flex-col gap-2">
+            {hydrated && isAuthenticated ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMobileMenuOpen(false);
+                    router.push('/profile');
+                  }}
+                  className="rounded-xl border border-slate-200 px-4 py-2 text-left text-sm font-medium text-slate-700"
+                >
+                  Profile
+                </button>
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  disabled={logoutLoading}
+                  className="rounded-xl border border-rose-200 px-4 py-2 text-left text-sm font-medium text-rose-700 disabled:opacity-70"
+                >
+                  {logoutLoading ? 'Logging out...' : 'Logout'}
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMobileMenuOpen(false);
+                    router.push('/login');
+                  }}
+                  className="rounded-xl border border-slate-200 px-4 py-2 text-left text-sm font-medium text-slate-700"
+                >
+                  Login
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMobileMenuOpen(false);
+                    router.push('/register');
+                  }}
+                  className="rounded-xl border border-slate-200 px-4 py-2 text-left text-sm font-medium text-slate-700"
+                >
+                  Register
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </header>
   );
 }
