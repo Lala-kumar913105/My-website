@@ -481,10 +481,10 @@ export default function SocialFeedPage() {
             <section className="ds-card">
               <h2 className="ds-title">Quick Actions</h2>
               <div className="mt-3 grid grid-cols-1 gap-2">
-                <button onClick={() => router.push("/search?type=products")} className="ds-btn-secondary w-full" type="button">
+                <button onClick={() => router.push("/search?type=product")} className="ds-btn-secondary w-full" type="button">
                   Explore Products
                 </button>
-                <button onClick={() => router.push("/search?type=services")} className="ds-btn-secondary w-full" type="button">
+                <button onClick={() => router.push("/search?type=service")} className="ds-btn-secondary w-full" type="button">
                   Explore Services
                 </button>
                 <button onClick={() => router.push("/assistant")} className="ds-btn-primary w-full" type="button">

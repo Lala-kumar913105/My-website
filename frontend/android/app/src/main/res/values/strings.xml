@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Zivolf</string>
+    <string name="title_activity_main">Zivolf</string>
+    <string name="package_name">com.zivolf.app</string>
+    <string name="custom_url_scheme">com.zivolf.app</string>
+</resources>

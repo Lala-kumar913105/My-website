@@ -140,8 +140,8 @@ def register_with_email(
     return AuthResponse(
         message="Registration successful",
         user=_serialize_auth_user(user),
-        access_token=access_token if not settings.is_production else None,
-        refresh_token=refresh_token if not settings.is_production else None,
+        access_token=access_token,
+        refresh_token=refresh_token,
     )
 
 
@@ -192,8 +192,8 @@ def login_with_email(
     return AuthResponse(
         message="Login successful",
         user=_serialize_auth_user(user),
-        access_token=access_token if not settings.is_production else None,
-        refresh_token=refresh_token if not settings.is_production else None,
+        access_token=access_token,
+        refresh_token=refresh_token,
     )
 
 

@@ -8,9 +8,13 @@
     "dev:restart": "node ./scripts/dev-restart.mjs",
     "dev:raw": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "android:aab": "node ./scripts/build-android-aab.mjs"
   },
   "dependencies": {
+    "@capacitor/android": "^8.3.1",
+    "@capacitor/cli": "^7.6.2",
+    "@capacitor/core": "^8.3.1",
     "@react-google-maps/api": "^2.20.8",
     "firebase": "^12.11.0",
     "leaflet": "^1.9.4",

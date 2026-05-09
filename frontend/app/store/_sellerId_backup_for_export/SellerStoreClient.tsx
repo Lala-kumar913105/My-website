@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import ListingCard, { Listing } from '../../components/ListingCard';
 import useSWR from 'swr';
 
@@ -16,13 +16,10 @@ interface Seller {
   is_approved: boolean;
 }
 
-interface PageProps {
-  params: { sellerId: string };
-}
-
-const SellerStorePage: React.FC<PageProps> = ({ params }) => {
+const SellerStorePage: React.FC = () => {
   const router = useRouter();
-  const parsedSellerId = parseInt(params.sellerId);
+  const params = useParams();
+  const parsedSellerId = parseInt(String(params?.sellerId || "0"));
   const API = process.env.NEXT_PUBLIC_API_BASE_URL;
   const [seller, setSeller] = useState<Seller | null>(null);
   const [isFollowing, setIsFollowing] = useState(false);
