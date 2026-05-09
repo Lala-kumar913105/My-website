@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { API_BASE_URL } from "../../lib/auth";
+import { API_BASE_URL, getValidLegacyToken } from "../../lib/auth";
 import { FALLBACK_PRODUCT_IMAGE, resolveProductImageSrc } from "../../lib/image";
 
 interface Product {
@@ -77,14 +77,11 @@ export default function CheckoutPage() {
     setLoading(true);
     setError(null);
     try {
-      const token = localStorage.getItem("token");
-      if (!token) {
-        router.push("/login?next=%2Fcheckout");
-        return;
-      }
+      const token = getValidLegacyToken();
 
       const profileResponse = await fetch(`${API}/api/v1/users/me`, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        credentials: "include",
       });
       if (!profileResponse.ok) {
         if (profileResponse.status === 401) {
@@ -99,10 +96,12 @@ export default function CheckoutPage() {
 
       const [cartResponse, coinsResponse] = await Promise.all([
         fetch(`${API}/api/v1/carts/${profile.id}`, {
-          headers: { Authorization: `Bearer ${token}` },
+          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+          credentials: "include",
         }),
         fetch(`${API}/api/v1/coins/balance`, {
-          headers: { Authorization: `Bearer ${token}` },
+          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+          credentials: "include",
         }),
       ]);
 
@@ -166,18 +165,15 @@ export default function CheckoutPage() {
     }
 
     try {
-      const token = localStorage.getItem("token");
-      if (!token) {
-        handleUnauthorized();
-        return;
-      }
+      const token = getValidLegacyToken();
 
       const response = await fetch(`${API}/api/v1/coupons/apply`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
+        credentials: "include",
         body: JSON.stringify({ coupon_code: couponCode.trim(), purchase_amount: subtotal }),
       });
 
@@ -212,11 +208,7 @@ export default function CheckoutPage() {
     setError(null);
 
     try {
-      const token = localStorage.getItem("token");
-      if (!token) {
-        handleUnauthorized();
-        return;
-      }
+      const token = getValidLegacyToken();
 
       const shippingAddress = [
         form.fullName.trim(),
@@ -232,8 +224,9 @@ export default function CheckoutPage() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
+        credentials: "include",
         body: JSON.stringify({
           shipping_address: shippingAddress,
           coupon_code: couponCode.trim() || undefined,

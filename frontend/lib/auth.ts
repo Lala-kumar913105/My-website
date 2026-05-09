@@ -16,6 +16,8 @@ if (!configuredApiBaseUrl && typeof console !== "undefined") {
 
 export const API_BASE_URL = normalizeApiBaseUrl(resolvedApiBaseUrl);
 
+const LEGACY_TOKEN_KEY = "token";
+
 type RequestOptions = {
   method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   body?: unknown;
@@ -59,12 +61,46 @@ export async function authRequest<T>(path: string, options: RequestOptions = {})
 export function persistTokenForLegacyPages(token?: string | null) {
   if (typeof window === "undefined") return;
   if (!token) return;
-  localStorage.setItem("token", token);
+  const normalized = token.replace(/^Bearer\s+/i, "").trim();
+  if (!normalized) return;
+  localStorage.setItem(LEGACY_TOKEN_KEY, normalized);
 }
 
 export function clearLegacyToken() {
   if (typeof window === "undefined") return;
-  localStorage.removeItem("token");
+  localStorage.removeItem(LEGACY_TOKEN_KEY);
+}
+
+function parseJwtExp(token: string): number | null {
+  const parts = token.split(".");
+  if (parts.length < 2) return null;
+  try {
+    const payload = JSON.parse(atob(parts[1].replace(/-/g, "+").replace(/_/g, "/")));
+    const exp = Number(payload?.exp);
+    return Number.isFinite(exp) ? exp : null;
+  } catch {
+    return null;
+  }
+}
+
+export function getValidLegacyToken(): string | null {
+  if (typeof window === "undefined") return null;
+  const raw = localStorage.getItem(LEGACY_TOKEN_KEY);
+  if (!raw) return null;
+
+  const token = raw.replace(/^Bearer\s+/i, "").trim();
+  if (!token) {
+    localStorage.removeItem(LEGACY_TOKEN_KEY);
+    return null;
+  }
+
+  const exp = parseJwtExp(token);
+  if (exp && Date.now() >= exp * 1000) {
+    localStorage.removeItem(LEGACY_TOKEN_KEY);
+    return null;
+  }
+
+  return token;
 }
 
 export function persistPostLoginRedirect(path: string) {
