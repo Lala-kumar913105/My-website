@@ -3,7 +3,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import { useParams, useRouter } from "next/navigation";
-import { API_BASE_URL } from "../../../../lib/auth";
+import {
+  API_BASE_URL,
+  buildLoginRedirectUrl,
+  clearLegacyToken,
+  getValidLegacyToken,
+  hasActiveSession,
+} from "../../../../lib/auth";
 import { resolveProductImageSrc } from "../../../../lib/image";
 
 interface ServiceListing {
@@ -169,9 +175,16 @@ export default function BookServicePage() {
     event.preventDefault();
     if (!service) return;
 
-    const token = localStorage.getItem("token");
+    const token = getValidLegacyToken();
     if (!token) {
-      router.push(`/login?next=${encodeURIComponent(`/services/${service.id}/book`)}`);
+      router.push(buildLoginRedirectUrl(`/services/${service.id}/book`));
+      return;
+    }
+
+    const active = await hasActiveSession();
+    if (!active) {
+      clearLegacyToken();
+      router.push(buildLoginRedirectUrl(`/services/${service.id}/book`));
       return;
     }
 
@@ -198,6 +211,11 @@ export default function BookServicePage() {
       });
 
       if (!response.ok) {
+        if (response.status === 401) {
+          clearLegacyToken();
+          router.push(buildLoginRedirectUrl(`/services/${service.id}/book`));
+          return;
+        }
         const detail = await response.json().catch(() => null);
         setSubmitError(detail?.detail || "Booking failed. Please try again.");
         return;

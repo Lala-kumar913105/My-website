@@ -1,9 +1,15 @@
 'use client';
 
 import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
-import { API_BASE_URL } from '../../lib/auth';
+import {
+  API_BASE_URL,
+  buildLoginRedirectUrl,
+  clearLegacyToken,
+  getValidLegacyToken,
+  hasActiveSession,
+} from '../../lib/auth';
 import LocationPicker from '../components/location/LocationPicker';
 
 type ListingType = 'product' | 'service';
@@ -79,6 +85,7 @@ const getErrorMessage = async (response: Response, context = 'request') => {
 
 export default function AddProductPage() {
   const router = useRouter();
+  const pathname = usePathname();
 
   const [form, setForm] = useState<FormState>(INITIAL_FORM);
   const [errors, setErrors] = useState<FieldErrors>({});
@@ -101,14 +108,23 @@ export default function AddProductPage() {
   );
 
   useEffect(() => {
-    const token = normalizeToken(localStorage.getItem('token'));
-    if (!token) {
-      toast.error('Please login to create a listing');
-      router.replace('/login');
-      return;
-    }
-    setAuthChecking(false);
-  }, [router]);
+    let mounted = true;
+    const checkAuth = async () => {
+      const active = await hasActiveSession();
+      if (!mounted) return;
+      if (!active) {
+        toast.error('Please login to create a listing');
+        router.replace(buildLoginRedirectUrl(pathname || '/add-product'));
+        return;
+      }
+      setAuthChecking(false);
+    };
+
+    void checkAuth();
+    return () => {
+      mounted = false;
+    };
+  }, [pathname, router]);
 
   useEffect(() => {
     let mounted = true;
@@ -299,10 +315,10 @@ export default function AddProductPage() {
     event.preventDefault();
     if (submitting) return;
 
-    const token = normalizeToken(localStorage.getItem('token'));
+    const token = normalizeToken(getValidLegacyToken());
     if (!token) {
       toast.error('Your session expired. Please login again.');
-      router.replace('/login');
+      router.replace(buildLoginRedirectUrl(pathname || '/add-product'));
       return;
     }
 
@@ -355,7 +371,7 @@ export default function AddProductPage() {
 
         if (!productResponse.ok) {
           if (productResponse.status === 401) {
-            localStorage.removeItem('token');
+            clearLegacyToken();
             throw new Error('Unauthorized. Please login again.');
           }
           throw new Error(await getErrorMessage(productResponse, 'Create product'));
@@ -396,7 +412,7 @@ export default function AddProductPage() {
 
         if (!serviceResponse.ok) {
           if (serviceResponse.status === 401) {
-            localStorage.removeItem('token');
+            clearLegacyToken();
             throw new Error('Unauthorized. Please login again.');
           }
           throw new Error(await getErrorMessage(serviceResponse, 'Create service'));

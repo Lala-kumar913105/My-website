@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import toast from 'react-hot-toast';
 import {
   authRequest,
+  hasActiveSession,
   consumePostLoginRedirect,
   persistPostLoginRedirect,
   persistTokenForLegacyPages,
@@ -39,6 +40,20 @@ function LoginContent() {
     }
   }, [searchParams]);
 
+  useEffect(() => {
+    let mounted = true;
+    const syncIfAlreadyLoggedIn = async () => {
+      const active = await hasActiveSession();
+      if (!mounted || !active) return;
+      const target = consumePostLoginRedirect('/');
+      router.replace(target);
+    };
+    syncIfAlreadyLoggedIn();
+    return () => {
+      mounted = false;
+    };
+  }, [router]);
+
   const validate = () => {
     const nextErrors: { email?: string; password?: string } = {};
     if (!email.trim()) {
@@ -70,7 +85,7 @@ function LoginContent() {
 
       persistTokenForLegacyPages(data.access_token);
       toast.success(data.message || 'Login successful');
-      const redirectTarget = consumePostLoginRedirect('/profile');
+      const redirectTarget = consumePostLoginRedirect('/');
       router.replace(redirectTarget);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Login failed');

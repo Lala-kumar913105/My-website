@@ -17,6 +17,7 @@ if (!configuredApiBaseUrl && typeof console !== "undefined") {
 export const API_BASE_URL = normalizeApiBaseUrl(resolvedApiBaseUrl);
 
 const LEGACY_TOKEN_KEY = "token";
+const AUTH_COOKIE_NAME = "access_token";
 
 type RequestOptions = {
   method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
@@ -71,6 +72,12 @@ export function clearLegacyToken() {
   localStorage.removeItem(LEGACY_TOKEN_KEY);
 }
 
+export function getAuthHeader(): HeadersInit | undefined {
+  const token = getValidLegacyToken();
+  if (!token) return undefined;
+  return { Authorization: `Bearer ${token}` };
+}
+
 function parseJwtExp(token: string): number | null {
   const parts = token.split(".");
   if (parts.length < 2) return null;
@@ -103,10 +110,40 @@ export function getValidLegacyToken(): string | null {
   return token;
 }
 
+export async function hasActiveSession(): Promise<boolean> {
+  try {
+    const token = getValidLegacyToken();
+    const response = await fetch(`${API_BASE_URL}/api/v1/users/me`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      credentials: "include",
+      cache: "no-store",
+    });
+
+    if (response.status === 401) {
+      clearLegacyToken();
+      return false;
+    }
+
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
 export function persistPostLoginRedirect(path: string) {
   if (typeof window === "undefined") return;
   if (!path || !path.startsWith("/") || path.startsWith("//")) return;
   sessionStorage.setItem(AUTH_REDIRECT_KEY, path);
+}
+
+export function buildLoginRedirectUrl(path: string) {
+  const safePath = path && path.startsWith("/") && !path.startsWith("//") ? path : "/";
+  return `/login?next=${encodeURIComponent(safePath)}`;
+}
+
+export function hasAuthCookieFromDocument(): boolean {
+  if (typeof document === "undefined") return false;
+  return document.cookie.split(";").some((cookie) => cookie.trim().startsWith(`${AUTH_COOKIE_NAME}=`));
 }
 
 export function consumePostLoginRedirect(defaultPath: string = "/") {

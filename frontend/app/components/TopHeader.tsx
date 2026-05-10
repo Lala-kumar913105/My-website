@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import LanguageToggle from "./LanguageToggle";
-import { API_BASE_URL, getValidLegacyToken, logoutUser } from "../../lib/auth";
+import { API_BASE_URL, buildLoginRedirectUrl, getValidLegacyToken, logoutUser } from "../../lib/auth";
 
 const CART_CHANGED_EVENT = "cart:changed";
 
@@ -159,7 +159,11 @@ export default function TopHeader() {
           <LanguageToggle />
           <button
             type="button"
-            onClick={() => router.push("/profile")}
+            onClick={() =>
+              hydrated && isAuthenticated
+                ? router.push("/profile")
+                : router.push(buildLoginRedirectUrl(pathname || "/"))
+            }
             className="hidden rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-300 sm:inline-flex"
           >
             {hydrated && isAuthenticated ? "Profile" : "Login"}
