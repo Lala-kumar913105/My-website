@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
+import { buildLoginRedirectUrl, clearLegacyToken, getValidLegacyToken } from '../../lib/auth'
 
 type ProfilePayload = {
   name: string
@@ -104,21 +105,20 @@ export default function ProfilePage() {
 
   const handleSessionExpired = useCallback(
     (message = 'Session expired. Please login again.') => {
-      localStorage.removeItem('token')
+      clearLegacyToken()
       localStorage.removeItem('phone_number')
       localStorage.removeItem('otp')
       setCoins(null)
       setProfile(null)
       setError(message)
       toast.error(message)
-      router.push('/login')
+      router.push(buildLoginRedirectUrl('/profile'))
     },
     [router]
   )
 
   const getStoredAuth = useCallback(() => {
-    const rawToken = localStorage.getItem('token')
-    const token = rawToken?.replace(/^Bearer\s+/i, '').trim() || ''
+    const token = getValidLegacyToken() || ''
 
     return { token }
   }, [])

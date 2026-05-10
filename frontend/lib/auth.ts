@@ -65,11 +65,15 @@ export function persistTokenForLegacyPages(token?: string | null) {
   const normalized = token.replace(/^Bearer\s+/i, "").trim();
   if (!normalized) return;
   localStorage.setItem(LEGACY_TOKEN_KEY, normalized);
+  const exp = parseJwtExp(normalized);
+  const maxAge = exp ? Math.max(0, Math.floor(exp - Date.now() / 1000)) : undefined;
+  document.cookie = `${AUTH_COOKIE_NAME}=${encodeURIComponent(normalized)}; Path=/; SameSite=Lax${typeof maxAge === "number" ? `; Max-Age=${maxAge}` : ""}`;
 }
 
 export function clearLegacyToken() {
   if (typeof window === "undefined") return;
   localStorage.removeItem(LEGACY_TOKEN_KEY);
+  document.cookie = `${AUTH_COOKIE_NAME}=; Path=/; Max-Age=0; SameSite=Lax`;
 }
 
 export function getAuthHeader(): HeadersInit | undefined {
