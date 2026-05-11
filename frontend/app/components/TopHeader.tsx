@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import LanguageToggle from "./LanguageToggle";
 import { API_BASE_URL, buildLoginRedirectUrl, getValidLegacyToken, logoutUser } from "../../lib/auth";
+import { useAuth } from "./AuthProvider";
 
 const CART_CHANGED_EVENT = "cart:changed";
 
@@ -18,6 +19,7 @@ export default function TopHeader() {
   const [logoutLoading, setLogoutLoading] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [hydrated, setHydrated] = useState(false);
+  const auth = useAuth();
 
   const isSearchPage = pathname === "/search";
 
@@ -105,6 +107,11 @@ export default function TopHeader() {
     };
   }, [fetchCartCount]);
 
+  useEffect(() => {
+    if (!auth.hydrated) return;
+    setIsAuthenticated(auth.isAuthenticated);
+  }, [auth.hydrated, auth.isAuthenticated]);
+
   const badgeText = useMemo(() => (cartCount > 99 ? "99+" : String(cartCount)), [cartCount]);
 
   const submitSearch = () => {
@@ -122,6 +129,7 @@ export default function TopHeader() {
       setCartCount(0);
       setIsAuthenticated(false);
       setMobileMenuOpen(false);
+      void auth.refreshAuth();
       router.push('/');
       setLogoutLoading(false);
     }

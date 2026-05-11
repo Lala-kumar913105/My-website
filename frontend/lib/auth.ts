@@ -18,6 +18,7 @@ export const API_BASE_URL = normalizeApiBaseUrl(resolvedApiBaseUrl);
 
 const LEGACY_TOKEN_KEY = "token";
 const AUTH_COOKIE_NAME = "access_token";
+const AUTH_STATE_CHANGED_EVENT = "auth:state-changed";
 
 type RequestOptions = {
   method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
@@ -41,11 +42,14 @@ function extractErrorMessage(data: any): string {
 
 export async function authRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const useCredentials = options.useCredentials ?? true;
+  const token = getValidLegacyToken();
+  const headers: HeadersInit = {
+    "Content-Type": "application/json",
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
   const response = await fetch(`${API_BASE_URL}${path}`, {
     method: options.method || "GET",
-    headers: {
-      "Content-Type": "application/json",
-    },
+    headers,
     credentials: useCredentials ? "include" : "omit",
     body: options.body ? JSON.stringify(options.body) : undefined,
   });
@@ -68,12 +72,23 @@ export function persistTokenForLegacyPages(token?: string | null) {
   const exp = parseJwtExp(normalized);
   const maxAge = exp ? Math.max(0, Math.floor(exp - Date.now() / 1000)) : undefined;
   document.cookie = `${AUTH_COOKIE_NAME}=${encodeURIComponent(normalized)}; Path=/; SameSite=Lax${typeof maxAge === "number" ? `; Max-Age=${maxAge}` : ""}`;
+  dispatchAuthStateChanged();
 }
 
 export function clearLegacyToken() {
   if (typeof window === "undefined") return;
   localStorage.removeItem(LEGACY_TOKEN_KEY);
   document.cookie = `${AUTH_COOKIE_NAME}=; Path=/; Max-Age=0; SameSite=Lax`;
+  dispatchAuthStateChanged();
+}
+
+export function dispatchAuthStateChanged() {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new Event(AUTH_STATE_CHANGED_EVENT));
+}
+
+export function getAuthStateChangedEventName() {
+  return AUTH_STATE_CHANGED_EVENT;
 }
 
 export function getAuthHeader(): HeadersInit | undefined {

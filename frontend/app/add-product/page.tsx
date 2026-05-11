@@ -289,6 +289,7 @@ export default function AddProductPage() {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${token}`,
       },
+      credentials: 'include',
       body: JSON.stringify(payload),
     });
 
@@ -307,6 +308,7 @@ export default function AddProductPage() {
         headers: {
           Authorization: `Bearer ${token}`,
         },
+        credentials: 'include',
       },
     );
   };
@@ -366,6 +368,7 @@ export default function AddProductPage() {
           headers: {
             Authorization: `Bearer ${token}`,
           },
+          credentials: 'include',
           body: productData,
         });
 
@@ -398,6 +401,7 @@ export default function AddProductPage() {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${token}`,
           },
+          credentials: 'include',
           body: JSON.stringify({
             name: form.title.trim(),
             description: form.description.trim(),

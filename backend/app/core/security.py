@@ -239,10 +239,7 @@ def get_current_user(
         raise HTTPException(status_code=401, detail="Not authenticated")
 
     try:
-        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[JWT_ALGORITHM])
-        print("JWT PAYLOAD:", payload)
-        if payload.get("type") and payload.get("type") != "access":
-            raise HTTPException(status_code=401, detail="Invalid token type")
+        payload = decode_access_token(token)
 
         raw_user_id = payload.get("sub")
         if raw_user_id is None:
@@ -258,12 +255,6 @@ def get_current_user(
             raise HTTPException(status_code=401, detail="User not found")
 
         return user
-    except ExpiredSignatureError as e:
-        print("JWT ERROR:", str(e))
-        raise HTTPException(status_code=401, detail="Token has expired")
-    except JWTError as e:
-        print("JWT ERROR:", str(e))
-        raise HTTPException(status_code=401, detail="Invalid token")
     except HTTPException:
         raise
     except Exception as e:

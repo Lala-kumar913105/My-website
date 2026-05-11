@@ -338,7 +338,7 @@ def verify_otp_and_login(
 
 
 @router.post("/refresh", response_model=Token)
-def refresh_access_token(payload: RefreshRequest, db: Session = Depends(get_db)):
+def refresh_access_token(payload: RefreshRequest, response: Response, db: Session = Depends(get_db)):
     token_payload = decode_refresh_token(payload.refresh_token)
     user_id = token_payload.get("user_id")
     if not user_id:
@@ -349,4 +349,5 @@ def refresh_access_token(payload: RefreshRequest, db: Session = Depends(get_db))
         raise HTTPException(status_code=404, detail="User not found")
 
     access_token = create_access_token(data={"sub": str(user.id), "email": user.email, "type": "access"})
+    set_auth_cookie(response, access_token)
     return Token(access_token=access_token, refresh_token=None, token_type="bearer")

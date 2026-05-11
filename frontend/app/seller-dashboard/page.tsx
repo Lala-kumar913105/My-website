@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { API_BASE_URL } from "../../lib/auth";
+import { API_BASE_URL, buildLoginRedirectUrl, clearLegacyToken, getValidLegacyToken } from "../../lib/auth";
 import { FALLBACK_PRODUCT_IMAGE, resolveProductImageSrc } from "../../lib/image";
 
 type SellerProfile = {
@@ -165,7 +165,7 @@ export default function SellerDashboardPage() {
 
   useEffect(() => {
     const init = async () => {
-      const storedToken = localStorage.getItem("token") || "";
+      const storedToken = getValidLegacyToken() || "";
       setToken(storedToken);
 
       try {
@@ -175,8 +175,8 @@ export default function SellerDashboardPage() {
         });
 
         if (profileRes.status === 401) {
-          localStorage.removeItem("token");
-          router.replace("/login");
+          clearLegacyToken();
+          router.replace(buildLoginRedirectUrl("/seller-dashboard"));
           return;
         }
 
@@ -199,8 +199,8 @@ export default function SellerDashboardPage() {
           setSellerMissing(true);
           setLoading(false);
         } else if (sellerRes.status === 401) {
-          localStorage.removeItem("token");
-          router.replace("/login");
+          clearLegacyToken();
+          router.replace(buildLoginRedirectUrl("/seller-dashboard"));
           return;
         } else {
           setGlobalError("Unable to verify seller profile right now.");

@@ -2,6 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { PropsWithChildren } from "react";
+import { AuthProvider } from "./AuthProvider";
 
 const PwaClientProvider = dynamic(() => import("./PwaClientProvider"), { ssr: false });
 const BottomNav = dynamic(() => import("./BottomNav"), { ssr: false });
@@ -9,11 +10,11 @@ const TopHeader = dynamic(() => import("./TopHeader"), { ssr: false });
 
 export default function ClientShell({ children }: PropsWithChildren) {
   return (
-    <>
+    <AuthProvider>
       <PwaClientProvider />
       <TopHeader />
       {children}
       <BottomNav />
-    </>
+    </AuthProvider>
   );
 }
