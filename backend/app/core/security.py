@@ -227,13 +227,12 @@ def get_current_user(
     db: Session = Depends(get_db),
 ):
     """Get the current user from the JWT token."""
-    token = None
-    if credentials and credentials.credentials:
-        token = credentials.credentials
-    else:
-        token = _extract_token_from_request(request)
+    cookie_token = _extract_token_from_request(request)
+    header_token = credentials.credentials if credentials and credentials.credentials else None
+    # Prefer cookie token to avoid stale localStorage bearer overriding fresh cookie session.
+    token = cookie_token or header_token
 
-    print("AUTH COOKIE EXISTS:", bool(token))
+    print("AUTH DEBUG:", {"has_cookie_token": bool(cookie_token), "has_header_token": bool(header_token), "using": "cookie" if cookie_token else ("header" if header_token else "none")})
 
     if not token:
         raise HTTPException(status_code=401, detail="Not authenticated")

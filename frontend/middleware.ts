@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 const AUTH_COOKIE_NAME = 'access_token';
+const AUTH_MIDDLEWARE_ENABLED = false; // TEMP DEBUG: disable redirect gating to isolate loop source
 
 const PROTECTED_PREFIXES = [
   '/add-product',
@@ -18,6 +19,10 @@ const isProtectedPath = (pathname: string) =>
   PROTECTED_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
 
 export function middleware(request: NextRequest) {
+  if (!AUTH_MIDDLEWARE_ENABLED) {
+    return NextResponse.next();
+  }
+
   const { pathname, search } = request.nextUrl;
 
   if (!isProtectedPath(pathname)) {
@@ -25,6 +30,7 @@ export function middleware(request: NextRequest) {
   }
 
   const token = request.cookies.get(AUTH_COOKIE_NAME)?.value;
+  console.log('[auth-middleware]', { pathname, hasCookie: Boolean(token) });
   if (token) {
     return NextResponse.next();
   }

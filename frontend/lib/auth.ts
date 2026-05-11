@@ -19,6 +19,7 @@ export const API_BASE_URL = normalizeApiBaseUrl(resolvedApiBaseUrl);
 const LEGACY_TOKEN_KEY = "token";
 const AUTH_COOKIE_NAME = "access_token";
 const AUTH_STATE_CHANGED_EVENT = "auth:state-changed";
+const DEBUG_AUTH = process.env.NEXT_PUBLIC_DEBUG_AUTH === "true";
 
 type RequestOptions = {
   method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
@@ -132,11 +133,29 @@ export function getValidLegacyToken(): string | null {
 export async function hasActiveSession(): Promise<boolean> {
   try {
     const token = getValidLegacyToken();
-    const response = await fetch(`${API_BASE_URL}/api/v1/users/me`, {
+    let response = await fetch(`${API_BASE_URL}/api/v1/users/me`, {
       headers: token ? { Authorization: `Bearer ${token}` } : undefined,
       credentials: "include",
       cache: "no-store",
     });
+
+    if (DEBUG_AUTH) {
+      console.log("[auth] hasActiveSession first attempt", {
+        hasToken: Boolean(token),
+        status: response.status,
+      });
+    }
+
+    if (response.status === 401 && token) {
+      // Retry once with cookie-only auth to avoid stale localStorage token overriding valid cookie.
+      response = await fetch(`${API_BASE_URL}/api/v1/users/me`, {
+        credentials: "include",
+        cache: "no-store",
+      });
+      if (DEBUG_AUTH) {
+        console.log("[auth] hasActiveSession cookie-only retry", { status: response.status });
+      }
+    }
 
     if (response.status === 401) {
       clearLegacyToken();

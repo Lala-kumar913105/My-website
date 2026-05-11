@@ -23,6 +23,7 @@ type LoginResponse = {
 };
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const DEBUG_AUTH = process.env.NEXT_PUBLIC_DEBUG_AUTH === 'true';
 
 function LoginContent() {
   const router = useRouter();
@@ -84,6 +85,12 @@ function LoginContent() {
       });
 
       persistTokenForLegacyPages(data.access_token);
+      if (DEBUG_AUTH) {
+        console.log('[login] success', {
+          hasAccessTokenInBody: Boolean(data.access_token),
+          redirectTarget: consumePostLoginRedirect('/'),
+        });
+      }
       toast.success(data.message || 'Login successful');
       const redirectTarget = consumePostLoginRedirect('/');
       router.replace(redirectTarget);
