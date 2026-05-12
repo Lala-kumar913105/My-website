@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import LanguageToggle from "./LanguageToggle";
-import { API_BASE_URL, buildLoginRedirectUrl, getValidLegacyToken, logoutUser } from "../../lib/auth";
+import { API_BASE_URL, getValidLegacyToken, logoutUser } from "../../lib/auth";
 import { useAuth } from "./AuthProvider";
 
 const CART_CHANGED_EVENT = "cart:changed";
@@ -136,7 +136,7 @@ export default function TopHeader() {
   };
 
   return (
-    <header className="border-b border-slate-200 bg-white/95 backdrop-blur">
+    <header className="relative z-40 border-b border-slate-200 bg-white/95 backdrop-blur pointer-events-auto">
       <div className="mx-auto flex w-full max-w-7xl flex-wrap items-center gap-3 px-4 py-3 sm:flex-nowrap sm:px-6 lg:px-8">
         <Link href="/" className="flex min-w-0 items-center gap-3">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-900 text-sm font-semibold text-white">
@@ -165,17 +165,21 @@ export default function TopHeader() {
 
         <div className="ml-auto flex items-center gap-2">
           <LanguageToggle />
-          <button
-            type="button"
-            onClick={() =>
-              hydrated && isAuthenticated
-                ? router.push("/profile")
-                : router.push(buildLoginRedirectUrl(pathname || "/"))
-            }
-            className="hidden rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-300 sm:inline-flex"
-          >
-            {hydrated && isAuthenticated ? "Profile" : "Login"}
-          </button>
+          {hydrated && isAuthenticated ? (
+            <Link
+              href="/profile"
+              className="hidden rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-300 sm:inline-flex"
+            >
+              Profile
+            </Link>
+          ) : (
+            <Link
+              href="/login"
+              className="hidden rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-300 sm:inline-flex"
+            >
+              Login
+            </Link>
+          )}
           {hydrated && isAuthenticated && (
             <button
               type="button"
@@ -187,13 +191,12 @@ export default function TopHeader() {
             </button>
           )}
           {hydrated && !isAuthenticated && (
-            <button
-              type="button"
-              onClick={() => router.push('/register')}
+            <Link
+              href="/register"
               className="hidden rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-300 sm:inline-flex"
             >
               Register
-            </button>
+            </Link>
           )}
           <button
             type="button"
