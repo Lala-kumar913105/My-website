@@ -5,7 +5,6 @@ const AUTH_MIDDLEWARE_ENABLED = true;
 
 const PROTECTED_PREFIXES = [
   '/add-product',
-  '/profile',
   '/my-products',
   '/seller-dashboard',
   '/booking-management',
@@ -42,7 +41,6 @@ export function middleware(request: NextRequest) {
 export const config = {
   matcher: [
     '/add-product/:path*',
-    '/profile/:path*',
     '/my-products/:path*',
     '/seller-dashboard/:path*',
     '/booking-management/:path*',

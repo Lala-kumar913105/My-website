@@ -83,6 +83,14 @@ export function clearLegacyToken() {
   dispatchAuthStateChanged();
 }
 
+export function clearAuthClientData() {
+  if (typeof window === "undefined") return;
+  clearLegacyToken();
+  localStorage.removeItem("phone_number");
+  localStorage.removeItem("otp");
+  localStorage.removeItem("user");
+}
+
 export function dispatchAuthStateChanged() {
   if (typeof window === "undefined") return;
   window.dispatchEvent(new Event(AUTH_STATE_CHANGED_EVENT));
@@ -210,6 +218,6 @@ export async function logoutUser() {
       useCredentials: true,
     });
   } finally {
-    clearLegacyToken();
+    clearAuthClientData();
   }
 }

@@ -3,7 +3,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
-import { buildLoginRedirectUrl, clearLegacyToken, getValidLegacyToken } from '../../lib/auth'
+import {
+  API_BASE_URL,
+  buildLoginRedirectUrl,
+  clearAuthClientData,
+  getValidLegacyToken,
+  hasActiveSession,
+  hasSessionHint,
+} from '../../lib/auth'
 
 type ProfilePayload = {
   name: string
@@ -71,18 +78,7 @@ const normalizeProfileData = (data: any): ProfilePayload => {
 export default function ProfilePage() {
   const router = useRouter()
 
-  const apiBaseUrl = useMemo(() => {
-    const rawBase = process.env.NEXT_PUBLIC_API_BASE_URL?.trim()
-    if (!rawBase) {
-      console.error(
-        'NEXT_PUBLIC_API_BASE_URL is missing. Falling back to https://api.zivolf.com'
-      )
-      return 'https://api.zivolf.com'
-    }
-
-    const normalized = rawBase.replace(/\/$/, '')
-    return normalized.replace(/\/api\/v1\/?$/, '')
-  }, [])
+  const apiBaseUrl = useMemo(() => API_BASE_URL, [])
 
   const [profile, setProfile] = useState<ProfilePayload | null>(null)
   const [formData, setFormData] = useState<ProfilePayload>({
@@ -102,12 +98,11 @@ export default function ProfilePage() {
   const [sellerProfile, setSellerProfile] = useState<SellerProfile | null>(null)
   const [sellerLoading, setSellerLoading] = useState(false)
   const [becomingSeller, setBecomingSeller] = useState(false)
+  const [isAuthChecking, setIsAuthChecking] = useState(true)
 
   const handleSessionExpired = useCallback(
     (message = 'Session expired. Please login again.') => {
-      clearLegacyToken()
-      localStorage.removeItem('phone_number')
-      localStorage.removeItem('otp')
+      clearAuthClientData()
       setCoins(null)
       setProfile(null)
       setError(message)
@@ -200,6 +195,28 @@ export default function ProfilePage() {
     let isMounted = true
 
     const fetchProfile = async () => {
+      setIsAuthChecking(true)
+      if (!hasSessionHint()) {
+        if (isMounted) {
+          setProfile(null)
+          setError(null)
+          router.replace(buildLoginRedirectUrl('/profile'))
+          setIsAuthChecking(false)
+        }
+        return
+      }
+
+      const activeSession = await hasActiveSession()
+      if (!activeSession) {
+        if (isMounted) {
+          setProfile(null)
+          setError(null)
+          router.replace(buildLoginRedirectUrl('/profile'))
+          setIsAuthChecking(false)
+        }
+        return
+      }
+
       const headers = buildAuthHeaders()
 
       try {
@@ -294,6 +311,10 @@ export default function ProfilePage() {
       } catch (err: any) {
         if (!isMounted) return
         setError(err?.message || 'Profile not available')
+      } finally {
+        if (isMounted) {
+          setIsAuthChecking(false)
+        }
       }
     }
 
@@ -498,7 +519,7 @@ export default function ProfilePage() {
     )
   }
 
-  if (!profile) {
+  if (isAuthChecking || !profile) {
     return (
       <div className="app-shell">
         <div className="app-container space-y-4">
