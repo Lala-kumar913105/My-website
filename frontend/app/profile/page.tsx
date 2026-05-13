@@ -7,7 +7,7 @@ import {
   API_BASE_URL,
   buildLoginRedirectUrl,
   clearAuthClientData,
-  getValidLegacyToken,
+  getBestClientAccessToken,
   hasActiveSession,
   hasSessionHint,
 } from '../../lib/auth'
@@ -113,7 +113,11 @@ export default function ProfilePage() {
   )
 
   const getStoredAuth = useCallback(() => {
-    const token = getValidLegacyToken() || ''
+    const token = getBestClientAccessToken() || ''
+
+    if (process.env.NEXT_PUBLIC_DEBUG_AUTH === 'true') {
+      console.log('[profile] token_check', { hasToken: Boolean(token) })
+    }
 
     return { token }
   }, [])
@@ -207,6 +211,9 @@ export default function ProfilePage() {
       }
 
       const activeSession = await hasActiveSession()
+      if (process.env.NEXT_PUBLIC_DEBUG_AUTH === 'true') {
+        console.log('[profile] active_session', { activeSession })
+      }
       if (!activeSession) {
         if (isMounted) {
           setProfile(null)
@@ -227,6 +234,10 @@ export default function ProfilePage() {
           credentials: 'include',
           cache: 'no-store',
         })
+
+        if (process.env.NEXT_PUBLIC_DEBUG_AUTH === 'true') {
+          console.log('[profile] /users/me status', { status: res.status })
+        }
 
         if (res.status === 401) {
           handleSessionExpired('Session expired. Please login again.')

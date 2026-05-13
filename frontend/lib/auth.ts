@@ -16,6 +16,7 @@ if (!configuredApiBaseUrl && typeof console !== "undefined") {
 
 export const API_BASE_URL = normalizeApiBaseUrl(resolvedApiBaseUrl);
 
+const PRIMARY_TOKEN_KEY = "access_token";
 const LEGACY_TOKEN_KEY = "token";
 const AUTH_COOKIE_NAME = "access_token";
 const AUTH_STATE_CHANGED_EVENT = "auth:state-changed";
@@ -69,6 +70,7 @@ export function persistTokenForLegacyPages(token?: string | null) {
   if (!token) return;
   const normalized = token.replace(/^Bearer\s+/i, "").trim();
   if (!normalized) return;
+  localStorage.setItem(PRIMARY_TOKEN_KEY, normalized);
   localStorage.setItem(LEGACY_TOKEN_KEY, normalized);
   const exp = parseJwtExp(normalized);
   const maxAge = exp ? Math.max(0, Math.floor(exp - Date.now() / 1000)) : undefined;
@@ -78,6 +80,7 @@ export function persistTokenForLegacyPages(token?: string | null) {
 
 export function clearLegacyToken() {
   if (typeof window === "undefined") return;
+  localStorage.removeItem(PRIMARY_TOKEN_KEY);
   localStorage.removeItem(LEGACY_TOKEN_KEY);
   document.cookie = `${AUTH_COOKIE_NAME}=; Path=/; Max-Age=0; SameSite=Lax`;
   dispatchAuthStateChanged();
@@ -120,22 +123,39 @@ function parseJwtExp(token: string): number | null {
 
 export function getValidLegacyToken(): string | null {
   if (typeof window === "undefined") return null;
-  const raw = localStorage.getItem(LEGACY_TOKEN_KEY);
+  const raw = localStorage.getItem(PRIMARY_TOKEN_KEY) || localStorage.getItem(LEGACY_TOKEN_KEY);
   if (!raw) return null;
 
   const token = raw.replace(/^Bearer\s+/i, "").trim();
   if (!token) {
+    localStorage.removeItem(PRIMARY_TOKEN_KEY);
     localStorage.removeItem(LEGACY_TOKEN_KEY);
     return null;
   }
 
   const exp = parseJwtExp(token);
   if (exp && Date.now() >= exp * 1000) {
+    localStorage.removeItem(PRIMARY_TOKEN_KEY);
     localStorage.removeItem(LEGACY_TOKEN_KEY);
     return null;
   }
 
   return token;
+}
+
+export function getCookieTokenFromDocument(): string | null {
+  if (typeof document === "undefined") return null;
+  const rawCookie = document.cookie
+    .split(";")
+    .map((cookie) => cookie.trim())
+    .find((cookie) => cookie.startsWith(`${AUTH_COOKIE_NAME}=`));
+  if (!rawCookie) return null;
+  const value = decodeURIComponent(rawCookie.split("=").slice(1).join("=")).trim();
+  return value || null;
+}
+
+export function getBestClientAccessToken(): string | null {
+  return getValidLegacyToken() || getCookieTokenFromDocument();
 }
 
 export function hasSessionHint(): boolean {

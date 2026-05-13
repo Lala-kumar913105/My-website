@@ -15,6 +15,8 @@ import {
 type LoginResponse = {
   message: string;
   access_token?: string;
+  token?: string;
+  accessToken?: string;
   user: {
     id: number;
     email: string;
@@ -84,10 +86,17 @@ function LoginContent() {
         body: { email: email.trim().toLowerCase(), password },
       });
 
-      persistTokenForLegacyPages(data.access_token);
+      const resolvedToken = data.access_token || data.token || data.accessToken;
+      persistTokenForLegacyPages(resolvedToken);
       if (DEBUG_AUTH) {
-        console.log('[login] success', {
-          hasAccessTokenInBody: Boolean(data.access_token),
+        console.log('[login] response', {
+          has_access_token: Boolean(data.access_token),
+          has_token: Boolean(data.token),
+          has_accessToken: Boolean(data.accessToken),
+        });
+        console.log('[login] token_saved', {
+          hasLocalAccessToken: Boolean(localStorage.getItem('access_token')),
+          hasCookieAccessToken: document.cookie.includes('access_token='),
           redirectTarget: consumePostLoginRedirect('/'),
         });
       }
