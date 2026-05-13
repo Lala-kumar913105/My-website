@@ -5,7 +5,7 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useI18n } from "../i18n/context";
 import toast from "react-hot-toast";
-import { API_BASE_URL } from "../../lib/auth";
+import { API_BASE_URL, getValidLegacyToken } from "../../lib/auth";
 import { FALLBACK_PRODUCT_IMAGE, resolveProductImageSrc } from "../../lib/image";
 
 export interface Listing {
@@ -74,7 +74,7 @@ const ListingCard = ({ listing, onAddToCart, onQuickAction }: ListingCardProps) 
 
   const internalAddToCart = async () => {
     const productId = resolveProductId();
-    const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+    const token = getValidLegacyToken();
 
     if (!API) {
       console.error("[AddToCart] Missing API base URL");
@@ -93,14 +93,6 @@ const ListingCard = ({ listing, onAddToCart, onQuickAction }: ListingCardProps) 
     }
 
     try {
-      console.log("[AddToCart] Start", {
-        listingId: listing.id,
-        resolvedProductId: productId,
-        sourceId: listing.source_id,
-        sourceType: listing.source_type,
-        hasToken: Boolean(token),
-      });
-
       const profileResponse = await fetch(`${API}/api/v1/users/me`, {
         method: "GET",
         headers: buildAuthHeaders(token),
@@ -111,7 +103,7 @@ const ListingCard = ({ listing, onAddToCart, onQuickAction }: ListingCardProps) 
         if (profileResponse.status === 401) {
           localStorage.removeItem("token");
           toast.error("Please login to add items to cart");
-          router.push("/login");
+          router.push(`/login?next=${encodeURIComponent(`/products/${resolveProductId()}?listing=${listing.id}`)}`);
           return;
         }
 
@@ -128,7 +120,7 @@ const ListingCard = ({ listing, onAddToCart, onQuickAction }: ListingCardProps) 
       if (!profile?.id) {
         console.error("[AddToCart] Invalid /users/me response", { profile });
         toast.error("Session issue detected. Please login again.");
-        router.push("/login");
+        router.push(`/login?next=${encodeURIComponent(`/products/${resolveProductId()}?listing=${listing.id}`)}`);
         return;
       }
 
@@ -138,11 +130,6 @@ const ListingCard = ({ listing, onAddToCart, onQuickAction }: ListingCardProps) 
         quantity: 1,
       };
 
-      console.log("[AddToCart] Request", {
-        endpoint: `${API}/api/v1/carts/add`,
-        payload,
-      });
-
       const response = await fetch(`${API}/api/v1/carts/add`, {
         method: "POST",
         headers: buildAuthHeaders(token),
@@ -151,8 +138,7 @@ const ListingCard = ({ listing, onAddToCart, onQuickAction }: ListingCardProps) 
       });
 
       if (response.ok) {
-        const data = await response.json().catch(() => null);
-        console.log("[AddToCart] Success", data);
+        await response.json().catch(() => null);
         if (typeof window !== "undefined") {
           window.dispatchEvent(new Event("cart:changed"));
         }
@@ -163,7 +149,7 @@ const ListingCard = ({ listing, onAddToCart, onQuickAction }: ListingCardProps) 
       if (response.status === 401) {
         localStorage.removeItem("token");
         toast.error("Session expired. Please login again.");
-        router.push("/login");
+        router.push(`/login?next=${encodeURIComponent(`/products/${resolveProductId()}?listing=${listing.id}`)}`);
         return;
       }
 

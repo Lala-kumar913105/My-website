@@ -130,8 +130,17 @@ export function getValidLegacyToken(): string | null {
   return token;
 }
 
+export function hasSessionHint(): boolean {
+  if (typeof window === "undefined") return false;
+  return Boolean(getValidLegacyToken()) || hasAuthCookieFromDocument();
+}
+
 export async function hasActiveSession(): Promise<boolean> {
   try {
+    if (!hasSessionHint()) {
+      return false;
+    }
+
     const token = getValidLegacyToken();
     let response = await fetch(`${API_BASE_URL}/api/v1/users/me`, {
       headers: token ? { Authorization: `Bearer ${token}` } : undefined,

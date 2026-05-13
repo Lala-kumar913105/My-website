@@ -4,7 +4,7 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import ListingCard, { Listing } from "./components/ListingCard";
 import type { CategoryItem } from "./components/CategoryRow";
-import { API_BASE_URL } from "../lib/auth";
+import { API_BASE_URL, getValidLegacyToken, hasAuthCookieFromDocument } from "../lib/auth";
 
 type GeoState = "idle" | "loading" | "ready" | "denied" | "unsupported";
 
@@ -191,9 +191,10 @@ function HomeContent() {
   };
 
   const fetchPersonalizedData = async () => {
-    const token = localStorage.getItem("token");
+    const token = getValidLegacyToken();
     if (!token) {
       setRecommendedForYou([]);
+      setRecommendedError(null);
       return;
     }
 
@@ -208,6 +209,12 @@ function HomeContent() {
       });
 
       if (!response.ok) {
+        if (response.status === 401) {
+          localStorage.removeItem("token");
+          setRecommendedForYou([]);
+          setRecommendedError(null);
+          return;
+        }
         throw new Error("Unable to fetch personalized products");
       }
 
@@ -227,22 +234,24 @@ function HomeContent() {
   };
 
   const fetchUserRole = async () => {
-    const token = localStorage.getItem("token");
-    if (!token) {
+    const token = getValidLegacyToken();
+    if (!token && !hasAuthCookieFromDocument()) {
       setUserRole(null);
       return;
     }
 
     try {
       const response = await fetch(`${API_BASE_URL}/api/v1/users/me`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        credentials: "include",
       });
 
       if (response.ok) {
         const profile = await response.json();
         setUserRole(profile?.role || null);
+      } else if (response.status === 401) {
+        localStorage.removeItem("token");
+        setUserRole(null);
       }
     } catch (error) {
       console.error(error);

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 const AUTH_COOKIE_NAME = 'access_token';
-const AUTH_MIDDLEWARE_ENABLED = false; // TEMP DEBUG: disable redirect gating to isolate loop source
+const AUTH_MIDDLEWARE_ENABLED = true;
 
 const PROTECTED_PREFIXES = [
   '/add-product',
@@ -30,7 +30,6 @@ export function middleware(request: NextRequest) {
   }
 
   const token = request.cookies.get(AUTH_COOKIE_NAME)?.value;
-  console.log('[auth-middleware]', { pathname, hasCookie: Boolean(token) });
   if (token) {
     return NextResponse.next();
   }

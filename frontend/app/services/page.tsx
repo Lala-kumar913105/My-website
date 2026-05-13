@@ -4,6 +4,7 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useI18n } from "../i18n/context";
 import ListingCard, { Listing } from "../components/ListingCard";
+import { API_BASE_URL } from "../../lib/auth";
 function ServicesContent() {
   const { t } = useI18n();
   const router = useRouter();
@@ -11,32 +12,19 @@ function ServicesContent() {
   const categoryId = useMemo(() => searchParams.get("category"), [searchParams]);
   const [listings, setListings] = useState<Listing[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const API = process.env.NEXT_PUBLIC_API_BASE_URL;
+  const API = API_BASE_URL;
 
   useEffect(() => {
-    const token = localStorage.getItem("token");
-    if (!token) {
-      router.push("/login");
-      return;
-    }
-
     const fetchListings = async () => {
       setIsLoading(true);
       try {
         const endpoint = `${API}/api/v1/listings?listing_type=service`;
 
-        const response = await fetch(endpoint, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
+        const response = await fetch(endpoint);
 
         if (response.ok) {
           const data: Listing[] = await response.json();
           setListings(data);
-        } else if (response.status === 401) {
-          localStorage.removeItem("token");
-          router.push("/login");
         } else {
           console.error("Failed to fetch services");
         }
@@ -48,7 +36,7 @@ function ServicesContent() {
     };
 
     fetchListings();
-  }, [categoryId, router]);
+  }, [API, categoryId, router]);
 
   return (
     <div className="min-h-screen bg-gray-50">
