@@ -15,8 +15,6 @@ import {
 type LoginResponse = {
   message: string;
   access_token?: string;
-  token?: string;
-  accessToken?: string;
   user: {
     id: number;
     email: string;
@@ -25,8 +23,6 @@ type LoginResponse = {
 };
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const DEBUG_AUTH = process.env.NEXT_PUBLIC_DEBUG_AUTH === 'true';
-
 function LoginContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -86,31 +82,12 @@ function LoginContent() {
         body: { email: email.trim().toLowerCase(), password },
       });
 
-      console.log('[DEBUG][login] full login API response:', data);
-
-      const resolvedToken = data.access_token || data.token || data.accessToken;
-      const tokenKeyFound = data.access_token
-        ? 'access_token'
-        : data.token
-          ? 'token'
-          : data.accessToken
-            ? 'accessToken'
-            : 'none';
-      console.log('[DEBUG][login] token key found:', tokenKeyFound);
-      persistTokenForLegacyPages(resolvedToken);
-      console.log('[DEBUG][login] localStorage access_token exists after save:', Boolean(localStorage.getItem('access_token')));
-      if (DEBUG_AUTH) {
-        console.log('[login] response', {
-          has_access_token: Boolean(data.access_token),
-          has_token: Boolean(data.token),
-          has_accessToken: Boolean(data.accessToken),
-        });
-        console.log('[login] token_saved', {
-          hasLocalAccessToken: Boolean(localStorage.getItem('access_token')),
-          hasCookieAccessToken: document.cookie.includes('access_token='),
-          redirectTarget: consumePostLoginRedirect('/'),
-        });
+      const resolvedToken = data.access_token?.trim();
+      if (!resolvedToken) {
+        throw new Error('Login response missing access_token');
       }
+      localStorage.setItem('access_token', resolvedToken);
+      persistTokenForLegacyPages(resolvedToken);
       toast.success(data.message || 'Login successful');
       const redirectTarget = consumePostLoginRedirect('/');
       router.replace(redirectTarget);
