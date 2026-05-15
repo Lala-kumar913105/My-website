@@ -200,6 +200,8 @@ export default function ProfilePage() {
 
     const fetchProfile = async () => {
       setIsAuthChecking(true)
+      console.log('[DEBUG][profile] localStorage access_token:', localStorage.getItem('access_token'))
+      console.log('[DEBUG][profile] document.cookie:', document.cookie)
       if (!hasSessionHint()) {
         if (isMounted) {
           setProfile(null)
@@ -225,6 +227,8 @@ export default function ProfilePage() {
       }
 
       const headers = buildAuthHeaders()
+      console.log('[DEBUG][profile] profile API URL:', `${apiBaseUrl}/api/v1/users/me`)
+      console.log('[DEBUG][profile] Authorization header exists:', Boolean((headers as Record<string, string>)?.Authorization))
 
       try {
         setError(null)
@@ -238,6 +242,9 @@ export default function ProfilePage() {
         if (process.env.NEXT_PUBLIC_DEBUG_AUTH === 'true') {
           console.log('[profile] /users/me status', { status: res.status })
         }
+        const responseBodyText = await res.clone().text().catch(() => '')
+        console.log('[DEBUG][profile] profile API response status:', res.status)
+        console.log('[DEBUG][profile] profile API response body:', responseBodyText)
 
         if (res.status === 401) {
           handleSessionExpired('Session expired. Please login again.')

@@ -86,8 +86,19 @@ function LoginContent() {
         body: { email: email.trim().toLowerCase(), password },
       });
 
+      console.log('[DEBUG][login] full login API response:', data);
+
       const resolvedToken = data.access_token || data.token || data.accessToken;
+      const tokenKeyFound = data.access_token
+        ? 'access_token'
+        : data.token
+          ? 'token'
+          : data.accessToken
+            ? 'accessToken'
+            : 'none';
+      console.log('[DEBUG][login] token key found:', tokenKeyFound);
       persistTokenForLegacyPages(resolvedToken);
+      console.log('[DEBUG][login] localStorage access_token exists after save:', Boolean(localStorage.getItem('access_token')));
       if (DEBUG_AUTH) {
         console.log('[login] response', {
           has_access_token: Boolean(data.access_token),
